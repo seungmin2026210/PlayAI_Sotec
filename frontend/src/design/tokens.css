@@ -1,0 +1,69 @@
+/*
+ * 디자인 토큰 — Claude Design 프로젝트
+ * "로그인 및 대시보드 시스템 구축" (kanban-design-system) 에서 가져옴.
+ * 기존 styles.css 의 --primary 등과 이름이 겹치지 않도록 그대로 유지.
+ * 원본의 `body{font-family:...}` 전역 규칙은 기존 화면(로그인/견적서) 폰트에
+ * 영향을 주지 않도록 제외 — Sidebar/TopBar/Dashboard 컴포넌트에서 개별 지정.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Open+Sans:wght@600&display=swap');
+
+:root {
+  /* Primary (blue) */
+  --blue-100: #b6d3fa; --blue-200: #93bdf8; --blue-300: #629ff4; --blue-400: #448df2;
+  --blue-500: #1570ef; --blue-700: #0f50aa; --blue-800: #0c3e83; --blue-900: #092f64;
+  /* Grey */
+  --grey-100: #d0d3d9; --grey-200: #b9bdc7; --grey-300: #989fad; --grey-400: #858d9d;
+  --grey-600: #5d6679; --grey-700: #48505e; --grey-800: #383e49; --grey-900: #2b2f38;
+  /* Error (red) */
+  --red-100: #fac5c1; --red-200: #f8a9a3; --red-300: #f5827a; --red-400: #f36960;
+  --red-500: #f04438; --red-600: #da3e33; --red-800: #84251f; --red-900: #651d18;
+  /* Success (green) */
+  --green-100: #b6e9d1; --green-200: #92deba; --green-300: #60cf9b; --green-400: #41c588;
+  --green-500: #12b76a; --green-600: #10a760; --green-800: #0a653a; --green-900: #084d2d;
+  /* Warning (amber) */
+  --amber-100: #fdddb3; --amber-200: #fbcc8e; --amber-300: #fab55a; --amber-400: #f9a63a;
+  --amber-500: #f79009; --amber-600: #e18308; --amber-700: #af6606; --amber-800: #884f05; --amber-900: #683c04;
+  /* Neutrals */
+  --ink-900: #000000; --ink-700: #444444; --ink-600: #666666; --ink-500: #777777;
+  --slate-800: #383e49; --slate-700: #485058; --slate-600: #5d6679; --slate-500: #667085;
+  --slate-400: #858d9d; --slate-300: #8e98a8;
+  --line-subtle: #e9ebf8; --line-default: #f0f1f3; --line-strong: #d0d3d9; --divider: #dadada;
+  --surface-page-a: #efefef; --surface-page-b: #f0f1f3; --surface-card: #ffffff;
+  --brand-teal: #009ed8; --brand-green: #0acf83;
+
+  /* Semantic aliases */
+  --color-primary: var(--blue-500); --color-primary-hover: var(--blue-700); --color-primary-tint: var(--blue-100);
+  --color-success: var(--green-600); --color-success-tint: var(--green-100);
+  --color-error: var(--red-600); --color-error-tint: var(--red-100);
+  --color-warning: var(--amber-500); --color-warning-tint: var(--amber-100);
+  --color-info: var(--blue-400);
+
+  --text-heading: var(--ink-700); --text-heading-alt: var(--slate-800);
+  --text-body: var(--slate-600); --text-secondary: var(--slate-500); --text-muted: var(--slate-400); --text-caption: var(--slate-300);
+  --text-on-primary: #ffffff; --text-link: var(--blue-500); --text-link-hover: var(--blue-700);
+
+  --border-default: var(--line-default); --border-subtle: var(--line-subtle); --border-strong: var(--grey-100);
+  --surface-page: var(--surface-page-a); --surface-raised: var(--surface-card);
+
+  /* Typography */
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-wordmark: "Open Sans", var(--font-sans);
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700;
+  --text-display-xs-size: 24px; --text-display-xs-line: 32px;
+  --text-xl-size: 20px; --text-xl-line: 30px;
+  --text-lg-size: 18px; --text-lg-line: 28px;
+  --text-md-size: 16px; --text-md-line: 24px;
+  --text-sm-size: 14px; --text-sm-line: 20px;
+  --text-xs-size: 12px; --text-xs-line: 16px;
+  --text-xxs-size: 10px; --text-xxs-line: 16px;
+
+  /* Spacing */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
+  --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+  --sidebar-width: 280px; --topbar-height: 100px;
+
+  /* Effects */
+  --radius-sm: 4px; --radius-md: 8px; --radius-lg: 12px; --radius-pill: 999px; --radius-round: 50%;
+  --shadow-card: 0px 1px 2px 0px rgba(16, 24, 40, 0.05);
+  --shadow-inset-border: inset 0 0 0 1px var(--border-default);
+}
