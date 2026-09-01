@@ -9,7 +9,7 @@
 | ORM | SQLAlchemy 2.x | 동기 세션 |
 | 마이그레이션 | Alembic | 초기 리비전 1개 + seed 스크립트 |
 | DB | PostgreSQL 15 | `docker-compose`로 로컬 기동 |
-| 엑셀 | openpyxl | 개별/목록 |
+| 엑셀 | openpyxl + Pillow | 개별/목록. Pillow 는 로고 이미지 삽입용(미설치 시 로고 없이 export 계속 성공) |
 | PDF | WeasyPrint (HTML→PDF) | 개별 견적서 |
 | 테스트 | pytest + httpx TestClient | 백엔드 위주 |
 

@@ -50,24 +50,9 @@ input, select {
 label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
 label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--text); }
 
-.app-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 24px;
-  background: #fff;
-  border-bottom: 1px solid var(--border);
-}
-.brand { font-weight: 700; font-size: 16px; color: var(--text); }
-.app-bar-right { display: flex; align-items: center; gap: 14px; }
-.who { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
-.role-tag {
-  background: #eef2ff; color: var(--primary-d);
-  padding: 2px 8px; border-radius: 999px; font-size: 12px;
-}
-
-main { padding: 24px; max-width: 1120px; margin: 0 auto; }
-.page { display: flex; flex-direction: column; gap: 16px; }
+/* 기존 상단바(Shell)는 design/AppShell.tsx 의 사이드바 레이아웃으로 대체됨 —
+   app-bar/brand/who/role-tag 클래스와 전역 main{} 규칙은 여기서 제거. */
+.page { display: flex; flex-direction: column; gap: 16px; max-width: 1120px; margin: 0 auto; }
 .page-head { display: flex; justify-content: space-between; align-items: flex-start; }
 .page-head h1 { margin: 0 0 2px; font-size: 20px; }
 .muted { color: var(--muted); font-size: 13px; margin: 2px 0; }
@@ -145,7 +130,8 @@ main { padding: 24px; max-width: 1120px; margin: 0 auto; }
 
 .login-wrap { display: flex; min-height: 100vh; align-items: center; justify-content: center; }
 .login-card { width: 360px; display: flex; flex-direction: column; gap: 14px; }
-.login-card h1 { font-size: 18px; margin: 0; }
+.login-logo { width: 88px; height: auto; align-self: center; margin-bottom: 4px; }
+.login-card h1 { font-size: 18px; margin: 0; text-align: center; }
 .login-hint { font-size: 12px; color: var(--muted); line-height: 1.6; }
 .login-hint code { background: #eef2f7; padding: 1px 5px; border-radius: 4px; }
 

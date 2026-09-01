@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import { ApiError } from "../api/client";
+import sotecLogo from "../assets/sotec-logo.png";
 
 export function Login() {
   const { login } = useAuth();
@@ -17,7 +18,7 @@ export function Login() {
     setBusy(true);
     try {
       await login(username, password);
-      navigate("/quotes", { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "로그인에 실패했습니다.");
     } finally {
@@ -28,6 +29,7 @@ export function Login() {
   return (
     <div className="login-wrap">
       <form className="card login-card" onSubmit={submit}>
+        <img src={sotecLogo} alt="SOTEC" className="login-logo" />
         <h1>SW 자산 견적서 관리 시스템</h1>
         <p className="muted">1단계 · 견적서 관리 (데모)</p>
 

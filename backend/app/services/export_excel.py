@@ -7,7 +7,7 @@ from datetime import datetime
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, Side
 
-from ..config import COMPANY, GROUPS, STATUS_LABELS
+from ..config import COMPANY, GROUPS, LOGO_PATH, STATUS_LABELS
 from ..models import Quote
 
 _WON = '#,##0"원"'
@@ -15,6 +15,28 @@ _BOLD = Font(bold=True)
 _TITLE = Font(bold=True, size=14)
 _thin = Side(style="thin", color="999999")
 _BOX = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
+
+
+def _add_logo(ws) -> int:
+    """워크시트 좌상단(A1)에 회사 로고를 삽입한다.
+
+    Pillow 미설치 등 환경 문제로 삽입에 실패해도 export 자체는 계속 동작해야
+    하므로 조용히 건너뛴다(WeasyPrint 의 PDF_UNAVAILABLE 격리와 동일한 방침).
+    반환값은 로고 아래로 본문이 시작될 행 번호.
+    """
+    if not LOGO_PATH.exists():
+        return 1
+    try:
+        from openpyxl.drawing.image import Image as XLImage  # noqa: PLC0415
+
+        img = XLImage(str(LOGO_PATH))
+        img.width, img.height = 110, 48  # 원본 138x60 비율 유지 축소
+        ws.add_image(img, "A1")
+        ws.row_dimensions[1].height = 36
+        ws.row_dimensions[2].height = 20
+        return 4
+    except Exception:  # pragma: no cover - 환경 의존(Pillow 등)
+        return 1
 
 
 def _kv(ws, row: int, label: str, value) -> int:
@@ -31,7 +53,7 @@ def build_quote_xlsx(q: Quote) -> bytes:
     for col in ("B", "C", "D", "E"):
         ws.column_dimensions[col].width = 20
 
-    r = 1
+    r = _add_logo(ws)
     ws.cell(row=r, column=1, value="견 적 서").font = _TITLE
     r += 2
 
@@ -116,19 +138,21 @@ def build_list_xlsx(quotes: list[Quote]) -> bytes:
     ws = wb.active
     ws.title = "견적서 목록"
 
+    header_row = _add_logo(ws)
     headers = [
         "관리번호", "그룹코드", "그룹명", "견적서명", "수신처", "발행일자",
         "발행담당자", "공급가액", "부가세", "부가세포함가", "부가세포함여부",
         "상태", "잠금여부", "등록시간",
     ]
     for c, h in enumerate(headers, start=1):
-        cell = ws.cell(row=1, column=c, value=h)
+        cell = ws.cell(row=header_row, column=c, value=h)
         cell.font = _BOLD
     widths = [12, 8, 18, 30, 24, 12, 12, 14, 12, 14, 12, 10, 8, 20]
     for i, w in enumerate(widths, start=1):
-        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+        ws.column_dimensions[ws.cell(row=header_row, column=i).column_letter].width = w
 
-    for row_idx, q in enumerate(quotes, start=2):
+    for offset, q in enumerate(quotes, start=1):
+        row_idx = header_row + offset
         vals = [
             q.mgmt_no,
             q.group_code,

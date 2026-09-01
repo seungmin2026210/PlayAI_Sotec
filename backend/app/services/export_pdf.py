@@ -5,12 +5,19 @@ AppError(PDF_UNAVAILABLE, 501) 를 던지고 서버는 계속 동작한다.
 """
 from __future__ import annotations
 
+import base64
 import html
 
-from ..config import COMPANY, GROUPS, STATUS_LABELS
+from ..config import COMPANY, GROUPS, LOGO_PATH, STATUS_LABELS
 from ..errors import PDF_UNAVAILABLE, AppError
 from ..models import Quote
 from .calculation import format_won
+
+_LOGO_DATA_URI = (
+    "data:image/png;base64," + base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
+    if LOGO_PATH.exists()
+    else ""
+)
 
 
 def _row(label: str, value: str) -> str:
@@ -34,6 +41,7 @@ def _build_html(q: Quote) -> str:
 * {{ font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; }}
 body {{ font-size: 11px; color: #1a1a1a; }}
 h1 {{ text-align: center; letter-spacing: 8px; margin: 0 0 16px; }}
+.doc-logo {{ display: block; height: 28px; margin: 0 0 8px; }}
 h2 {{ font-size: 12px; border-left: 4px solid #333; padding-left: 6px; margin: 16px 0 6px; }}
 table.kv {{ width: 100%; border-collapse: collapse; margin-bottom: 4px; }}
 table.kv th {{ width: 130px; text-align: left; background: #f4f4f4; border: 1px solid #ccc; padding: 4px 8px; }}
@@ -48,6 +56,7 @@ table.sum td {{ text-align: right; padding: 4px 8px; border-bottom: 1px solid #d
 table.sum tr.total th, table.sum tr.total td {{ font-weight: bold; border-top: 2px solid #333; border-bottom: none; }}
 .note {{ margin-top: 12px; font-style: italic; color: #555; }}
 </style></head><body>
+{f'<img class="doc-logo" src="{_LOGO_DATA_URI}" alt="{html.escape(COMPANY["name"])}">' if _LOGO_DATA_URI else ""}
 <h1>견 적 서</h1>
 
 <h2>공급자 (자사)</h2>

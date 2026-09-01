@@ -6,6 +6,8 @@
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -74,6 +76,10 @@ COMPANY: dict[str, str] = {
     "address": "서울특별시 ...",
     "tel": "02-0000-0000",
 }
+
+# PDF/엑셀 견적서 출력물에 삽입하는 자사 로고. 파일 없으면 각 export 서비스가
+# 조용히 로고 없이 출력한다(PDF_UNAVAILABLE 과 동일하게 export 자체는 항상 성공).
+LOGO_PATH: Path = Path(__file__).resolve().parent / "assets" / "sotec-logo.png"
 
 # ---------------------------------------------------------------------------
 # 계산 상수 (기획서 5장 / 확정)

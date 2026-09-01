@@ -53,7 +53,12 @@ docker-compose.yml    로컬 PostgreSQL
 | `lib/vat.ts` | `computePreview` — 등록/수정 폼 실시간 계산(서버 규칙과 동일) |
 | `components/RoleGate.tsx` | `SuperAdminOnly` — **open-3 역할별 화면 격리** |
 | `components/{Toast,StatusBadge,ItemsEditor}.tsx` | |
+| `design/` | Claude Design 프로젝트("로그인 및 대시보드 시스템 구축", kanban-design-system) 에서 이식한 대시보드 셸. `tokens.css`(디자인 토큰) · `Icon.tsx`(아이콘 10종) · `Sidebar.tsx`/`TopBar.tsx`/`AppShell.tsx`(사이드바+상단바 레이아웃, `/login` 제외 전체 라우트를 감쌈) |
 | `pages/{Login,QuoteList,QuoteDetail,QuoteForm}.tsx` | |
+| `pages/Dashboard.tsx` | 로그인 후 첫 화면(`/dashboard`). 통계·갱신 캘린더·예산 집행은 **범위 밖(향후 단계) 목업 데이터** — 실제 데이터가 연동된 화면은 계약관리 › 견적관리(`/quotes`, 기존 QuoteList) 뿐 |
+| `pages/Placeholder.tsx` | 구매관리(`/purchase`)·계약관리(`/contract`) 등 아직 백엔드가 없는 사이드바 메뉴용 "준비 중" 화면 |
+
+사이드바 메뉴 구조(계약관리 그룹 하위 견적관리/구매관리/계약관리)와 라우팅은 `design/Sidebar.tsx` 에서 관리 — 새 메뉴 추가 시 `CONTRACT_CHILDREN` 과 `App.tsx` 라우트를 함께 수정한다.
 
 권한은 프론트 버튼 숨김이 아니라 **서버가 최종 방어선**. 새 쓰기 엔드포인트엔 `Depends(require_super_admin)` 필수.
 
