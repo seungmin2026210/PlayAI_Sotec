@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "implement-specs": {
+      "source": "warpdotdev/common-skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/implement-specs/SKILL.md",
+      "computedHash": "cc0e505eb50d4b8fb31e6ab66ed49e9420e7dc9c4c2fa28a121728c8142eb57e"
+    }
+  }
+}
