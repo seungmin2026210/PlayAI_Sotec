@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>배포 전 테스트 사이클</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root{
+    --bg:#F4F5F7; --surface:#FFFFFF; --surface-2:#ECEEF1;
+    --ink:#161B22; --ink-muted:#5B6472; --border:#DEE1E7;
+    --accent:#1E3A5F; --accent-soft:#E7ECF3;
+    --ok:#2E6E4E; --ok-soft:#E4F0E9;
+    --shadow: 0 1px 2px rgba(20,24,32,0.05), 0 8px 24px -12px rgba(20,24,32,0.12);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#10141B; --surface:#171C25; --surface-2:#1F2530;
+      --ink:#E7E9EE; --ink-muted:#9AA3B2; --border:#2A3140;
+      --accent:#8FB4E3; --accent-soft:#1E2C3E;
+      --ok:#7FCBA4; --ok-soft:#173226;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#10141B; --surface:#171C25; --surface-2:#1F2530;
+    --ink:#E7E9EE; --ink-muted:#9AA3B2; --border:#2A3140;
+    --accent:#8FB4E3; --accent-soft:#1E2C3E;
+    --ok:#7FCBA4; --ok-soft:#173226;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+  }
+
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans KR","Pretendard",-apple-system,sans-serif;font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;}
+  .mono{font-family:"IBM Plex Mono","IBM Plex Sans KR",monospace;}
+  h1,h2{font-family:"Gowun Batang",serif;font-weight:700;text-wrap:balance;color:var(--ink);margin:0;}
+
+  header{padding:clamp(28px,6vw,56px) clamp(16px,4vw,40px) 32px;width:100%;box-sizing:border-box;}
+  .inner{max-width:860px;margin:0 auto;}
+  .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:0.78rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--accent);margin:0 0 12px;}
+  h1{font-size:clamp(1.7rem,1.3rem+1.6vw,2.4rem);}
+  .subtitle{color:var(--ink-muted);font-size:1rem;max-width:66ch;margin:12px 0 0;}
+
+  .fill-row{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px;}
+  .fill{flex:1;min-width:180px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px;}
+  .fill label{display:block;font-size:0.72rem;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;}
+  .fill input{border:none;background:transparent;font-size:0.95rem;color:var(--ink);width:100%;font-family:inherit;padding:0;}
+  .fill input:focus{outline:none;}
+
+  .rule{margin-top:20px;padding:14px 16px;background:var(--accent-soft);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:10px;font-size:0.88rem;}
+  .rule strong{font-weight:700;}
+
+  .accounts{margin-top:14px;display:flex;flex-wrap:wrap;gap:10px;font-size:0.82rem;}
+  .accounts .acct{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;}
+  .accounts .acct .role{color:var(--ink-muted);display:block;font-size:0.72rem;margin-bottom:2px;}
+
+  main{width:100%;box-sizing:border-box;padding:0 clamp(16px,4vw,40px) 80px;}
+  .section-head{max-width:860px;margin:36px auto 12px;}
+  .section-head h2{font-size:1.2rem;}
+  .section-head p{color:var(--ink-muted);font-size:0.85rem;margin:4px 0 0;}
+  .list{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:12px;}
+
+  .item{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:16px 18px;display:flex;gap:14px;align-items:flex-start;transition:background 0.12s,border-color 0.12s;}
+  .item:has(.chk:checked){background:var(--ok-soft);border-color:var(--ok);}
+  .chk{width:20px;height:20px;flex:none;margin-top:2px;accent-color:var(--ok);cursor:pointer;}
+  .item-body{flex:1;min-width:0;}
+  .item-top{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;margin-bottom:6px;}
+  .item-id{font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:0.82rem;color:var(--accent);}
+  .item-title{font-weight:600;font-size:0.95rem;}
+  .item-pre{font-size:0.82rem;color:var(--ink-muted);margin:0 0 6px;}
+  .item-pre .k{color:var(--ink);font-weight:600;}
+  .item-steps{font-size:0.85rem;margin:0 0 8px;padding-left:20px;}
+  .item-steps li{margin-bottom:3px;}
+  .item-expect{font-size:0.85rem;background:var(--surface-2);border-radius:8px;padding:8px 10px;}
+  .item-expect .k{color:var(--ink-muted);font-weight:600;}
+  .item-note{margin-top:8px;width:100%;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:0.82rem;font-family:inherit;background:var(--bg);color:var(--ink);}
+  .item-note:focus{outline:2px solid var(--accent);outline-offset:1px;}
+  .item-note::placeholder{color:var(--ink-muted);}
+
+  .progress{position:sticky;top:0;z-index:10;background:color-mix(in srgb, var(--bg) 92%, transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:12px clamp(16px,4vw,40px);}
+  .progress-inner{max-width:860px;margin:0 auto;display:flex;align-items:center;gap:14px;font-size:0.85rem;flex-wrap:wrap;}
+  .progress-bar{flex:1;min-width:120px;height:8px;background:var(--surface-2);border-radius:999px;overflow:hidden;}
+  .progress-fill{height:100%;background:var(--ok);width:0%;transition:width 0.15s;}
+  .progress-count{font-family:"IBM Plex Mono",monospace;color:var(--ink-muted);white-space:nowrap;}
+  .save-btn{margin-left:auto;padding:8px 16px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--surface);font-family:"IBM Plex Sans KR",sans-serif;font-size:0.85rem;font-weight:600;cursor:pointer;white-space:nowrap;}
+  .save-btn:hover{opacity:0.88;}
+  .save-msg{font-size:0.78rem;color:var(--ink-muted);white-space:nowrap;}
+
+  footer{max-width:860px;margin:0 auto;padding:20px clamp(16px,4vw,40px) 60px;color:var(--ink-muted);font-size:0.85rem;}
+</style>
+</head>
+<body>
+
+<div class="progress">
+  <div class="progress-inner">
+    <span class="progress-count mono"><span id="doneCount">0</span> / <span id="totalCount">0</span> 완료</span>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <button class="save-btn" id="saveBtn" type="button">결과 파일로 저장</button>
+    <span class="save-msg" id="saveMsg"></span>
+  </div>
+</div>
+
+<header>
+  <div class="inner">
+    <p class="eyebrow">Pre-Deploy Test Cycle</p>
+    <h1>배포 전 테스트 사이클</h1>
+    <p class="subtitle">실제 서비스 오픈이라기보다 "이렇게 만들었다"를 보여주기 위한 점검입니다. 급하게 최소한만 볼 필요는 없어서, 각 항목을 어디를 눌러서 무엇을 확인하는지 최대한 자세히 적었습니다. 위에서부터 순서대로 눌러보고 체크하면 됩니다.</p>
+
+    <div class="fill-row">
+      <div class="fill"><label>담당자</label><input type="text" id="tester" placeholder="이름 입력"></div>
+      <div class="fill"><label>실행 일시</label><input type="text" id="runAt" placeholder="예: 2026-09-03 10:00"></div>
+      <div class="fill"><label>대상 환경</label><input type="text" id="env" placeholder="예: 로컬(localhost:5173)"></div>
+    </div>
+
+    <div class="rule">
+      pytest 자동화 30개는 별도로 이미 통과 확인됨(<span class="mono">cd backend && source .venv/bin/activate && pytest</span>). 여기 있는 항목들은 화면을 직접 눌러야 확인되는 것들만 모았습니다. 체크하면 카드가 초록으로 바뀌고, 안 되는 게 있으면 <strong>배포를 막을 필요 없이</strong> 바로 아래 메모칸에 뭐가 안 됐는지만 적어두세요 — 나중에 그 메모만 보고 고치면 됩니다.
+    </div>
+
+    <div class="accounts">
+      <div class="acct"><span class="role">전체관리자</span><span class="mono">Admin / 1234</span></div>
+      <div class="acct"><span class="role">그룹관리자 (A그룹)</span><span class="mono">test1 / 1234</span></div>
+      <div class="acct"><span class="role">화면 주소</span><span class="mono">localhost:5173</span></div>
+      <div class="acct"><span class="role">시드 견적서</span><span class="mono">26-A-001, 26-A-002, 26-B-001</span></div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <div class="section-head">
+    <h2>필수 13개</h2>
+    <p>이 프로젝트에서 가장 중요한 규칙들 — 권한, 필수 검증, 상태 잠금, 다운로드가 실제로 되는지.</p>
+  </div>
+  <div class="list" id="listRequired">
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">AUTH-07</span><span class="item-title">그룹관리자는 쓰기 액션을 하나도 못 해야 함</span></div>
+        <p class="item-pre"><span class="k">사전조건</span> 로그아웃 상태에서 시작</p>
+        <ol class="item-steps">
+          <li>로그인 화면에서 <span class="mono">test1 / 1234</span>로 로그인 (그룹관리자, A그룹)</li>
+          <li>계약관리 › 견적관리에서 A그룹 견적(예: <span class="mono">26-A-001</span>) 상세로 들어감</li>
+          <li>승인, 반려, 취소, 발송, 구매반영 버튼이 있는지, 있다면 각각 눌러봄</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 버튼 자체가 안 보이거나, 눌러도 "권한이 없습니다" 계열 안내만 뜨고 실제로 상태가 바뀌지 않아야 함</div>
+        <input type="text" class="item-note" placeholder="결과/비고 (안 됐으면 여기에)">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">CREATE-02</span><span class="item-title">필수 항목을 비우면 등록이 막혀야 함</span></div>
+        <p class="item-pre"><span class="k">사전조건</span> Admin / 1234로 로그인</p>
+        <ol class="item-steps">
+          <li>견적관리 › 신규 등록 화면으로 이동</li>
+          <li>견적서명, 수신처명, 담당자명 중 하나 이상을 비워둠</li>
+          <li>저장 버튼 클릭</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 저장되지 않고, 어떤 항목이 비었는지 알 수 있는 안내 문구가 표시됨</div>
+        <input type="text" class="item-note" placeholder="결과/비고 (안 됐으면 여기에)">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">CREATE-05</span><span class="item-title">수량에 음수를 넣으면 막혀야 함</span></div>
+        <p class="item-pre"><span class="k">사전조건</span> Admin으로 신규 등록 화면</p>
+        <ol class="item-steps">
+          <li>품목 한 줄 추가</li>
+          <li>수량 칸에 <span class="mono">-1</span> 입력</li>
+          <li>저장 시도</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> "갯수는 1 이상이어야 합니다" 계열 메시지와 함께 저장이 막힘</div>
+        <input type="text" class="item-note" placeholder="결과/비고 (안 됐으면 여기에)">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">CREATE-06</span><span class="item-title">단가에 음수를 넣으면 막혀야 함</span></div>
+        <p class="item-pre"><span class="k">사전조건</span> Admin으로 신규 등록 화면</p>
+        <ol class="item-steps">
+          <li>품목 한 줄 추가</li>
+          <li>금액 칸에 <span class="mono">-1000</span> 입력</li>
+          <li>저장 시도</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> "금액은 0보다 커야 합니다" 계열 메시지와 함께 저장이 막힘</div>
+        <input type="text" class="item-note" placeholder="결과/비고 (안 됐으면 여기에)">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">CALC-05</span><span class="item-title">부가세 포함/별도 표기가 정확해야 함</span></div>
+        <p class="item-pre"><span class="k">사전조건</span> Admin으로 로그인</p>
+        <ol class="item-steps">
+          <li>견적 하나는 "부가세 포함"으로 등록</li>
+          <li>견적 하나는 "부가세 별도"로 등록</li>
+          <li>두 견적 각각 상세 화면과 엑셀 export를 열어 금액·문구 비교</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 선택한 옵션에 맞는 금액과 문구가 화면·엑셀 양쪽에 정확히 반영됨</div>
+        <input type="text" class="item-note" placeholder="결과/비고 (안 됐으면 여기에)">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">EDIT-01</span><span class="item-title">제출됨 견적은 수정이 실제로 저장돼야 함</span></div>
+        <ol class="item-steps">
+          <li>제출됨 상태 견적(예: <span class="mono">26-A-002</span>) 열기</li>
+          <li>항목 금액이나 품목명을 하나 바꾸고 저장</li>
+          <li>새로고침해서 값이 그대로 남아있는지 확인</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 수정한 값이 정상 저장·유지됨</div>
+        <input type="text" class="item-note" placeholder="결과/비고 (안 됐으면 여기에)">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">EDIT-02</span><span class="item-title">승인된 견적도 잠기지 않았으면 수정 가능해야 함 (의도된 동작)</span></div>
+        <p class="item-pre"><span class="k">사전조건</span> 견적 하나를 먼저 승인 처리해둠</p>
+        <ol class="item-steps">
+          <li>방금 승인한 견적을 다시 열기</li>
+          <li>항목 수정 시도</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 구매반영으로 잠기지 않은 이상 수정이 됨 — 막히면 오히려 버그</div>
+        <input type="text" class="item-note" placeholder="결과/비고 (안 됐으면 여기에)">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">EDIT-04</span><span class="item-title">반려/취소된 견적은 수정이 막혀야 함</span></div>
+        <p class="item-pre"><span class="k">사전조건</span> 견적 하나를 반려 또는 취소 처리해둠</p>
+        <ol class="item-steps">
+          <li>그 견적 열기</li>
+          <li>수정 버튼이 있는지, 있다면 눌러서 수정 시도</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 수정 버튼이 없거나, 눌러도 "읽기전용" 계열 안내와 함께 막힘</div>
+        <input type="text" class="item-note" placeholder="결과/비고 (안 됐으면 여기에)">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">EDIT-05</span><span class="item-title">구매반영(잠금)된 견적은 수정·삭제가 막혀야 함</span></div>
+        <p class="item-pre"><span class="k">사전조건</span> 견적 하나에 구매반영/구매잠금 적용해둠</p>
+        <ol class="item-steps">
+          <li>그 견적에서 수정 시도</li>
+          <li>그 견적에서 삭제 시도</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 둘 다 막히고, 잠겨 있다는 안내가 보임</div>
+        <input type="text" class="item-note" placeholder="결과/비고 (안 됐으면 여기에)">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">EDIT-06</span><span class="item-title">삭제가 실제로 되고, 삭제된 건 다시 못 봐야 함</span></div>
+        <ol class="item-steps">
+          <li>삭제해도 되는 견적(테스트용으로 하나 새로 등록해서 사용 추천) 선택</li>
+          <li>삭제 버튼으로 삭제</li>
+          <li>목록에서 사라졌는지 확인</li>
+          <li>그 견적의 상세 주소로 직접 다시 들어가봄</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 목록에는 없고, 상세로 직접 들어가면 "찾을 수 없음" 류 화면이 뜸</div>
+        <input type="text" class="item-note" placeholder="결과/비고 (안 됐으면 여기에)">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">EXPORT-01</span><span class="item-title">엑셀 다운로드가 실제로 열려야 함</span></div>
+        <ol class="item-steps">
+          <li>아무 견적 상세에서 "엑셀 export" 버튼 클릭</li>
+          <li>다운로드된 파일을 실제로 열어봄</li>
+          <li>금액·품목·견적번호가 화면과 일치하는지 확인</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 파일이 깨지지 않고 열리며 값이 정확함</div>
+        <input type="text" class="item-note" placeholder="결과/비고 (안 됐으면 여기에)">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">EXPORT-02</span><span class="item-title">PDF 다운로드가 실제로 열리거나, 안전하게 실패해야 함</span></div>
+        <ol class="item-steps">
+          <li>같은 견적 상세에서 "PDF export" 버튼 클릭</li>
+          <li>다운로드된 파일을 열어봄</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 정상적으로 열리거나, 안 되더라도 "PDF 생성 중 오류가 발생했습니다. 엑셀 export 를 이용하세요" 안내만 뜨고 사이트 자체는 계속 멀쩡해야 함</div>
+        <input type="text" class="item-note" placeholder="결과/비고 (안 됐으면 여기에)">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">LOCK-02</span><span class="item-title">구매관리가 진짜 연동이 아니라는 걸 화면에서 알 수 있어야 함</span></div>
+        <ol class="item-steps">
+          <li>구매반영/구매잠금 버튼이나 그 근처에 안내 문구가 있는지 확인</li>
+          <li>없다면 발표·데모 때 말로 짚어줄 포인트로 메모해두기</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 보는 사람이 실제 구매 데이터와 연동된 것으로 오해하지 않을 정도의 안내가 있음</div>
+        <input type="text" class="item-note" placeholder="결과/비고 (안 됐으면 여기에)">
+      </div>
+    </label>
+
+  </div>
+
+  <div class="section-head">
+    <h2>선택 13개 (시간 되면)</h2>
+    <p>급한 건 아니지만 훑어보면 더 꼼꼼해 보이는 항목들.</p>
+  </div>
+  <div class="list" id="listOptional">
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">AUTH-08</span><span class="item-title">전체관리자는 전 그룹을 다 조회·조작할 수 있어야 함</span></div>
+        <ol class="item-steps">
+          <li>Admin으로 로그인</li>
+          <li>A/B/C 등 여러 그룹의 견적을 자유롭게 열람·수정해봄</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 그룹 제한 없이 전부 가능</div>
+        <input type="text" class="item-note" placeholder="결과/비고">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">CREATE-03</span><span class="item-title">존재하지 않는 그룹으로는 등록이 안 돼야 함</span></div>
+        <ol class="item-steps">
+          <li>신규 등록에서 그룹 선택을 A~E 밖의 값으로 바꿔봄 (화면에 없으면 개발자도구로 강제 전송해도 됨)</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 검증 오류로 막힘</div>
+        <input type="text" class="item-note" placeholder="결과/비고">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">CREATE-04</span><span class="item-title">품목 0개로는 등록이 안 돼야 함</span></div>
+        <ol class="item-steps">
+          <li>신규 등록에서 품목을 하나도 추가하지 않고 저장 시도</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> "항목이 1개 이상 필요합니다" 류 안내</div>
+        <input type="text" class="item-note" placeholder="결과/비고">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">CREATE-12</span><span class="item-title">관리번호 연도는 발행일자가 아니라 오늘 날짜 기준</span></div>
+        <ol class="item-steps">
+          <li>발행일자를 과거나 미래로 바꿔서 견적 등록</li>
+          <li>발급된 관리번호의 연도 확인</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 발행일자와 무관하게 오늘 연도로 채번됨</div>
+        <input type="text" class="item-note" placeholder="결과/비고">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">STATUS-03</span><span class="item-title">반려 사유에 공백만 넣으면 막혀야 함</span></div>
+        <ol class="item-steps">
+          <li>제출됨 견적 반려 화면에서 사유 칸에 스페이스바만 입력 후 반려 시도</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> "사유가 필요합니다" 계열 안내와 함께 막힘</div>
+        <input type="text" class="item-note" placeholder="결과/비고">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">STATUS-07</span><span class="item-title">반려됨·취소됨 견적은 어떤 상태 변경도 안 돼야 함</span></div>
+        <ol class="item-steps">
+          <li>반려됨 견적에서 승인/취소 시도</li>
+          <li>취소됨 견적에서 승인/반려 시도</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 전부 막힘</div>
+        <input type="text" class="item-note" placeholder="결과/비고">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">EDIT-03</span><span class="item-title">수정해도 상태값 자체는 안 바뀌어야 함</span></div>
+        <ol class="item-steps">
+          <li>승인됨 견적을 수정</li>
+          <li>저장 후 상태 라벨이 여전히 "승인됨"인지 확인</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> "제출됨"으로 되돌아가지 않고 "승인됨" 유지</div>
+        <input type="text" class="item-note" placeholder="결과/비고">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">EDIT-07</span><span class="item-title">삭제한 관리번호는 재사용되지 않아야 함</span></div>
+        <ol class="item-steps">
+          <li>같은 그룹에서 견적 하나 삭제</li>
+          <li>같은 그룹으로 새 견적 등록</li>
+          <li>새 관리번호가 삭제된 번호를 건너뛰고 발급되는지 확인</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 삭제된 번호는 비어있는 채로 남고, 다음 번호가 새로 발급됨</div>
+        <input type="text" class="item-note" placeholder="결과/비고">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">EXPORT-03</span><span class="item-title">PDF가 실패해도 사이트는 계속 정상 동작해야 함</span></div>
+        <ol class="item-steps">
+          <li>PDF export를 연달아 여러 번 눌러보며 다른 기능(목록 조회 등)이 같이 멀쩡한지 확인</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> PDF만 실패하고 나머지 기능엔 영향 없음</div>
+        <input type="text" class="item-note" placeholder="결과/비고">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">EXPORT-07</span><span class="item-title">목록 엑셀도 조회 권한만큼만 담겨야 함</span></div>
+        <ol class="item-steps">
+          <li>Admin으로 목록 엑셀 다운로드 → 전체 그룹 포함 확인</li>
+          <li>test1로 목록 엑셀 다운로드 → A그룹만 포함되는지 확인</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 각자 조회 범위만큼만 파일에 담김</div>
+        <input type="text" class="item-note" placeholder="결과/비고">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">EXPORT-08</span><span class="item-title">목록 화면엔 PDF 다운로드가 없어야 함 (의도된 설계)</span></div>
+        <ol class="item-steps">
+          <li>견적 목록 화면에서 PDF 관련 버튼이 있는지 확인</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 없음 — 있다면 오히려 회귀(버그)</div>
+        <input type="text" class="item-note" placeholder="결과/비고">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">SEND-01</span><span class="item-title">발송 버튼은 안내만 뜨고 실제 메일은 안 나가야 함</span></div>
+        <ol class="item-steps">
+          <li>견적 상세에서 발송 버튼 클릭</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> "이메일 발송 기능은 준비 중입니다" 계열 안내만 뜨고 끝</div>
+        <input type="text" class="item-note" placeholder="결과/비고">
+      </div>
+    </label>
+
+    <label class="item">
+      <input type="checkbox" class="chk">
+      <div class="item-body">
+        <div class="item-top"><span class="item-id">LOCK-01</span><span class="item-title">구매반영 버튼을 누르면 실제로 잠겨야 함</span></div>
+        <ol class="item-steps">
+          <li>제출됨 또는 승인됨 견적에서 구매반영 버튼 클릭</li>
+          <li>이후 그 견적을 다시 열어 잠김 표시와 수정 불가 확인</li>
+        </ol>
+        <div class="item-expect"><span class="k">예상 결과 ·</span> 잠김 상태와 시각이 반영되고, 이후 읽기전용으로 바뀜</div>
+        <input type="text" class="item-note" placeholder="결과/비고">
+      </div>
+    </label>
+
+  </div>
+
+  <footer>
+    체크·메모는 이 브라우저 탭 안에서만 유지되고 새로고침하면 사라집니다. 위 "결과 파일로 저장" 버튼을 누르면 지금까지 체크·메모한 내용이 텍스트 파일로 다운로드됩니다. 전체 케이스 목록(자동화 여부 포함)은 <span class="mono">qa/quote-test-cases-internal.html</span> 참고.
+  </footer>
+</main>
+
+<script>
+  const boxes = document.querySelectorAll('.chk');
+  const doneCount = document.getElementById('doneCount');
+  const totalCount = document.getElementById('totalCount');
+  const fill = document.getElementById('progressFill');
+  totalCount.textContent = boxes.length;
+
+  function update(){
+    const done = [...boxes].filter(b => b.checked).length;
+    doneCount.textContent = done;
+    fill.style.width = (done / boxes.length * 100) + '%';
+  }
+  boxes.forEach(b => b.addEventListener('change', update));
+  update();
+
+  document.getElementById('saveBtn').addEventListener('click', () => {
+    const tester = document.getElementById('tester').value || '(미입력)';
+    const runAt = document.getElementById('runAt').value || '(미입력)';
+    const env = document.getElementById('env').value || '(미입력)';
+
+    const lines = [];
+    lines.push('배포 전 테스트 사이클 — 실행 결과');
+    lines.push('담당자: ' + tester);
+    lines.push('실행 일시: ' + runAt);
+    lines.push('대상 환경: ' + env);
+    lines.push('');
+
+    function dumpSection(title, listEl){
+      lines.push('## ' + title);
+      listEl.querySelectorAll('.item').forEach(item => {
+        const checked = item.querySelector('.chk').checked;
+        const id = item.querySelector('.item-id').textContent.trim();
+        const label = item.querySelector('.item-title').textContent.trim();
+        const note = item.querySelector('.item-note').value.trim();
+        lines.push('[' + (checked ? 'x' : ' ') + '] ' + id + ' — ' + label + (note ? '  ▸ 비고: ' + note : ''));
+      });
+      lines.push('');
+    }
+
+    dumpSection('필수 13개', document.getElementById('listRequired'));
+    dumpSection('선택 13개', document.getElementById('listOptional'));
+
+    const totalDone = [...boxes].filter(b => b.checked).length;
+    lines.push('총 ' + totalDone + ' / ' + boxes.length + ' 완료');
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0,16).replace(/[-:T]/g,'').replace(/(\d{8})(\d{4})/, '$1_$2');
+    a.href = url;
+    a.download = '테스트사이클_결과_' + stamp + '.txt';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    const msg = document.getElementById('saveMsg');
+    msg.textContent = '저장됨: ' + a.download;
+    setTimeout(() => { msg.textContent = ''; }, 4000);
+  });
+</script>
+
+</body>
+</html>
