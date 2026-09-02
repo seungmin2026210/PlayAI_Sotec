@@ -8,7 +8,7 @@ pydantic-settings==2.7.0
 python-multipart==0.0.20
 itsdangerous==2.2.0
 openpyxl==3.1.5
-Pillow==11.1.0   # openpyxl 이미지(로고) 삽입에 필요. 미설치 환경에서도 export_excel._add_logo 가 조용히 건너뜀
-weasyprint==63.1
+Pillow==12.3.0   # openpyxl 이미지(로고/인감) 삽입 + scripts/make_seal.py 임시 직인 생성. 미설치여도 export 는 조용히 로고/인감 생략
+weasyprint==69.0 # PDF. Windows 는 GTK3 런타임(libgobject 등) 필요 — winget: tschoonj.GTKForWindows. 미충족 시 501 PDF_UNAVAILABLE 로 폴백
 pytest==8.3.4
 httpx==0.28.1

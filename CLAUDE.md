@@ -25,7 +25,7 @@ docker-compose.yml    로컬 PostgreSQL
 
 | 파일 | 역할 |
 |---|---|
-| `config.py` | **유일한 상수 정의처**: `ACCOUNTS`(계정), `GROUPS`, `COMPANY`(자사정보), `VAT_RATE`, `TRUNCATE_UNIT`, `SEQ_MAX`, 상태값 |
+| `config.py` | **유일한 상수 정의처**: `ACCOUNTS`(계정), `GROUPS`, `COMPANY`(자사정보), `VAT_RATE`, `TRUNCATE_UNIT`, `SEQ_MAX`, 상태값, 견적서 export 양식 문구(`MGMT_NO_DISPLAY_PREFIX`, `QUOTE_*`), 직인(`SEAL_PATH`/`SEAL_MM`) |
 | `models.py` | `quotes`, `quote_items`, `number_sequences`, `retired_numbers` |
 | `schemas.py` | Pydantic 전송 스키마 + 입력 유효성(음수/0, 필수) |
 | `auth.py` | 로그인 시뮬레이션(범위 외). 토큰엔 username 만, role/group 은 매 요청 `ACCOUNTS` 재조회 |
@@ -35,8 +35,8 @@ docker-compose.yml    로컬 PostgreSQL
 | `services/numbering.py` | 채번 `YY-그룹코드-순번`, `SELECT FOR UPDATE`, 999 초과 `409`, `retire()` 결번 대장 |
 | `services/calculation.py` | 십만단위 절사 → 부가세 10% → 포함가. `format_won`(**open-6 표기 격리**) |
 | `services/status.py` | 상태 전이표 `ALLOWED`, `guard_mutable`, `apply_transition`, `apply_purchase_lock`, `apply_edit_policy`(**open-10 수정정책 격리**) |
-| `services/export_excel.py` | openpyxl: 개별 견적서 / 목록 |
-| `services/export_pdf.py` | WeasyPrint HTML→PDF. import/렌더 실패 시 `501 PDF_UNAVAILABLE`, 서버는 계속 동작 |
+| `services/export_excel.py` | openpyxl: 개별 견적서(실제 견적서.jpg 양식) / 목록. APPROVED 는 대표자명 옆 직인 합성 |
+| `services/export_pdf.py` | WeasyPrint HTML→PDF, 엑셀과 동일 양식. Windows GTK PATH 자동 보정. import/렌더 실패 시 `501 PDF_UNAVAILABLE`, 서버는 계속 동작 |
 | `routers/` | `auth.py`, `meta.py`, `quotes.py` — HTTP·권한·직렬화만, 로직은 services |
 
 라우트 등록 순서 주의: `GET /api/quotes/export.xlsx` 는 `GET /api/quotes/{quote_id}` **보다 먼저** 선언해야 한다.
@@ -80,6 +80,8 @@ alembic upgrade head
 python seed.py                    # 데모 견적서 3건 (--reset 로 초기화)
 uvicorn app.main:app --reload --port 8000          # /docs 에 API 문서
 ```
+- PDF export: Windows 는 GTK3 런타임 필요 — `winget install tschoonj.GTKForWindows`. 없으면 PDF 만 `501 PDF_UNAVAILABLE`.
+- 임시 직인 재생성(문구/크기 변경 시): `py -3 ../scripts/make_seal.py`. 실제 직인은 `backend/app/assets/sotec-seal.png` 교체.
 
 ### 프론트엔드
 ```bash
@@ -93,7 +95,7 @@ npm run build                     # tsc && vite build
 ### 테스트
 ```bash
 cd backend && .venv\Scripts\activate
-pytest                            # 27 tests. quote_test DB 필요.
+pytest                            # 30 tests. quote_test DB 필요(없으면 DB 테스트는 skip, tests/unit/ 만 실행).
 ```
 - `QUOTE_TESTING=1` 이면 `DATABASE_URL_TEST` 사용. `conftest.py` 가 `create_all` + 매 테스트 `TRUNCATE ... RESTART IDENTITY`.
 - 계산/채번 로직만 빠르게 확인: `python -c "from app.services.calculation import compute; ..."` (DB 불필요, 순수 함수)

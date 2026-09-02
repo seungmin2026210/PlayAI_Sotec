@@ -1,36 +1,62 @@
-"""엑셀 export — openpyxl. TECH 09."""
+"""엑셀 export — openpyxl. TECH 09.
+
+개별 견적서(`build_quote_xlsx`)는 실제 견적서.jpg 양식을 따른다:
+상단 자사/수신처 블록 → 인사말 → 합계금액 → 용역(계약) → 항목표(규격·세액·비고 포함)
+→ 합계 블록 → 대금결제/납품/WORK SCOPE → 서명란. APPROVED 견적서는 대표자명 옆에
+직인(config.SEAL_PATH)을 합성한다. 목록(`build_list_xlsx`)은 변경 없음.
+"""
 from __future__ import annotations
 
 import io
 from datetime import datetime
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, Side
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 
-from ..config import COMPANY, GROUPS, LOGO_PATH, STATUS_LABELS
+from ..config import (
+    COMPANY,
+    GROUPS,
+    LOGO_PATH,
+    QUOTE_AUTHOR_ROLE,
+    QUOTE_AUTHOR_TEAM,
+    QUOTE_CONDITIONS,
+    QUOTE_GREETING,
+    QUOTE_GREETING_LINES,
+    QUOTE_SIGNOFF_COLS,
+    QUOTE_VALIDITY_NOTE,
+    SEAL_MM,
+    SEAL_PATH,
+    STATUS_APPROVED,
+    STATUS_LABELS,
+    VAT_RATE,
+)
 from ..models import Quote
+from .numbering import format_mgmt_no_display
 
 _WON = '#,##0"원"'
 _BOLD = Font(bold=True)
-_TITLE = Font(bold=True, size=14)
+_TITLE = Font(bold=True, size=20)
+_ITALIC = Font(italic=True, color="666666", size=9)
 _thin = Side(style="thin", color="999999")
 _BOX = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
+_HEAD_FILL = PatternFill("solid", fgColor="F2F2F2")
+_CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
+_LEFT = Alignment(horizontal="left", vertical="center", wrap_text=True)
+_RIGHT = Alignment(horizontal="right", vertical="center")
+
+_NCOLS = 9  # A..I
 
 
 def _add_logo(ws) -> int:
-    """워크시트 좌상단(A1)에 회사 로고를 삽입한다.
-
-    Pillow 미설치 등 환경 문제로 삽입에 실패해도 export 자체는 계속 동작해야
-    하므로 조용히 건너뛴다(WeasyPrint 의 PDF_UNAVAILABLE 격리와 동일한 방침).
-    반환값은 로고 아래로 본문이 시작될 행 번호.
-    """
+    """워크시트 좌상단(A1)에 회사 로고. Pillow 미설치 등 실패 시 조용히 건너뛴다."""
     if not LOGO_PATH.exists():
         return 1
     try:
         from openpyxl.drawing.image import Image as XLImage  # noqa: PLC0415
 
         img = XLImage(str(LOGO_PATH))
-        img.width, img.height = 110, 48  # 원본 138x60 비율 유지 축소
+        img.width, img.height = 110, 48
         ws.add_image(img, "A1")
         ws.row_dimensions[1].height = 36
         ws.row_dimensions[2].height = 20
@@ -39,94 +65,187 @@ def _add_logo(ws) -> int:
         return 1
 
 
-def _kv(ws, row: int, label: str, value) -> int:
-    ws.cell(row=row, column=1, value=label).font = _BOLD
-    ws.cell(row=row, column=2, value=value)
-    return row + 1
+def _put(ws, cell: str, value, *, font=None, align=None, box=False, fill=False):
+    c = ws[cell]
+    c.value = value
+    if font:
+        c.font = font
+    if align:
+        c.alignment = align
+    if box:
+        c.border = _BOX
+    if fill:
+        c.fill = _HEAD_FILL
+    return c
+
+
+def _stamp_seal(ws, cell: str) -> None:
+    """APPROVED 견적서에 직인 합성. 파일/ Pillow 없으면 조용히 생략(로고와 동일 방침)."""
+    if not SEAL_PATH.exists():
+        return
+    try:
+        from openpyxl.drawing.image import Image as XLImage  # noqa: PLC0415
+
+        px = int(SEAL_MM / 25.4 * 96)  # mm -> px @96dpi
+        img = XLImage(str(SEAL_PATH))
+        img.width = img.height = px
+        ws.add_image(img, cell)
+    except Exception:  # pragma: no cover - 환경 의존
+        pass
 
 
 def build_quote_xlsx(q: Quote) -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = "견적서"
-    ws.column_dimensions["A"].width = 18
-    for col in ("B", "C", "D", "E"):
-        ws.column_dimensions[col].width = 20
+    ws.sheet_view.showGridLines = False
+    widths = [5, 16, 12, 12, 8, 13, 14, 13, 12]  # A..I
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
 
     r = _add_logo(ws)
-    ws.cell(row=r, column=1, value="견 적 서").font = _TITLE
+
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=_NCOLS)
+    _put(ws, f"A{r}", "견 적 서", font=_TITLE, align=_CENTER)
+    ws.row_dimensions[r].height = 30
     r += 2
 
-    ws.cell(row=r, column=1, value="[ 공급자 (자사) ]").font = _BOLD
+    # ---- 좌: 견적 기본정보 / 우: 공급자 -------------------------------------
+    top = r
+    _put(ws, f"A{r}", "견적일자", font=_BOLD)
+    _put(ws, f"B{r}", q.issue_date.isoformat())
+    _put(ws, f"E{r}", "[ 공급자 (자사) ]", font=_BOLD)
     r += 1
-    r = _kv(ws, r, "회사명", COMPANY["name"])
-    r = _kv(ws, r, "사업자등록번호", COMPANY["biz_no"])
-    r = _kv(ws, r, "대표자명", COMPANY["ceo_name"])
-    r = _kv(ws, r, "주소", COMPANY.get("address", ""))
-    r = _kv(ws, r, "연락처", COMPANY.get("tel", ""))
+    _put(ws, f"A{r}", "견적유효기간", font=_BOLD)
+    _put(ws, f"B{r}", QUOTE_VALIDITY_NOTE)
+    _put(ws, f"E{r}", "등록번호", font=_BOLD)
+    _put(ws, f"F{r}", COMPANY["biz_no"])
     r += 1
+    _put(ws, f"A{r}", "견적 NO", font=_BOLD)
+    _put(ws, f"B{r}", format_mgmt_no_display(q.seq_year, q.group_code, q.seq_no))
+    _put(ws, f"E{r}", "상호", font=_BOLD)
+    _put(ws, f"F{r}", COMPANY["name"])
+    _put(ws, f"H{r}", "대표자", font=_BOLD)
+    ceo_cell = f"I{r}"
+    _put(ws, ceo_cell, f"{COMPANY['ceo_name']} (인)")
+    if q.status == STATUS_APPROVED:
+        _stamp_seal(ws, ceo_cell)
+    r += 1
+    _put(ws, f"E{r}", "주소", font=_BOLD)
+    _put(ws, f"F{r}", COMPANY.get("address", ""))
+    r += 1
+    _put(ws, f"A{r}", "[ 수신처 (고객사) ]", font=_BOLD)
+    _put(ws, f"E{r}", "업태", font=_BOLD)
+    _put(ws, f"F{r}", COMPANY.get("biz_type", ""))
+    _put(ws, f"H{r}", "종목", font=_BOLD)
+    _put(ws, f"I{r}", COMPANY.get("biz_item", ""))
+    r += 1
+    _put(ws, f"A{r}", "고객사명", font=_BOLD)
+    _put(ws, f"B{r}", q.customer_name)
+    _put(ws, f"E{r}", "전화번호", font=_BOLD)
+    _put(ws, f"F{r}", COMPANY.get("tel", ""))
+    _put(ws, f"H{r}", "FAX", font=_BOLD)
+    _put(ws, f"I{r}", COMPANY.get("fax", ""))
+    r += 1
+    _put(ws, f"A{r}", "담당자", font=_BOLD)
+    _put(ws, f"B{r}", q.customer_contact_name or "")
+    _put(ws, f"C{r}", q.customer_contact_phone or "")
+    _put(ws, f"E{r}", "견적 작성자", font=_BOLD)
+    _put(ws, f"F{r}", f"{QUOTE_AUTHOR_TEAM} {GROUPS.get(q.group_code, '')} / {QUOTE_AUTHOR_ROLE}")
+    r += 1
+    _put(ws, f"A{r}", "C.C", font=_BOLD)
+    _put(ws, f"B{r}", "")  # 참조자 — 데이터 없음(양식 자리만)
+    r = max(r, top + 8) + 2
 
-    ws.cell(row=r, column=1, value="[ 수신처 (고객사) ]").font = _BOLD
+    # ---- 인사말 ----------------------------------------------------------
+    _put(ws, f"A{r}", QUOTE_GREETING, font=_BOLD)
     r += 1
-    r = _kv(ws, r, "고객사명", q.customer_name)
-    r = _kv(ws, r, "담당자", q.customer_contact_name or "")
-    r = _kv(ws, r, "연락처", q.customer_contact_phone or "")
-    r += 1
-
-    ws.cell(row=r, column=1, value="[ 견적 정보 ]").font = _BOLD
-    r += 1
-    r = _kv(ws, r, "관리번호", q.mgmt_no)
-    r = _kv(ws, r, "견적서명", q.title)
-    r = _kv(ws, r, "그룹", f"{q.group_code} ({GROUPS.get(q.group_code, '')})")
-    r = _kv(ws, r, "발행일자", q.issue_date.isoformat())
-    r = _kv(ws, r, "발행 담당자", q.issuer_name)
-    r = _kv(ws, r, "상태", STATUS_LABELS.get(q.status, q.status))
-    r = _kv(ws, r, "구매관리 반영", "예(읽기전용)" if q.purchase_locked else "아니오")
-    r += 1
-
-    # 항목 표
-    headers = ["No", "품목", "갯수", "단가(공급가액)", "금액"]
-    for c, h in enumerate(headers, start=1):
-        cell = ws.cell(row=r, column=c, value=h)
-        cell.font = _BOLD
-        cell.border = _BOX
-        cell.alignment = Alignment(horizontal="center")
-    r += 1
-
-    for item in q.items:
-        ws.cell(row=r, column=1, value=item.line_no).border = _BOX
-        ws.cell(row=r, column=2, value=item.name).border = _BOX
-        c3 = ws.cell(row=r, column=3, value=item.qty)
-        c3.border = _BOX
-        c3.number_format = "#,##0"
-        c4 = ws.cell(row=r, column=4, value=item.unit_price)
-        c4.border = _BOX
-        c4.number_format = _WON
-        c5 = ws.cell(row=r, column=5, value=item.line_amount)
-        c5.border = _BOX
-        c5.number_format = _WON
+    for line in QUOTE_GREETING_LINES:
+        _put(ws, f"A{r}", line)
         r += 1
-
     r += 1
-    # 합계 블록
-    def money_row(label: str, value: int) -> None:
+
+    # ---- 합계금액 요약 --------------------------------------------------
+    _put(ws, f"A{r}", "합계금액 (공급가액 + 세액)", font=_BOLD, box=True, fill=True)
+    ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=4)
+    tc = _put(ws, f"B{r}", q.total_with_vat, font=Font(bold=True, size=13), align=_RIGHT, box=True)
+    tc.number_format = _WON
+    r += 2
+
+    # ---- 용역(계약) ---------------------------------------------------
+    _put(ws, f"A{r}", "용역(계약)명", font=_BOLD)
+    ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=_NCOLS)
+    _put(ws, f"B{r}", q.title, align=_LEFT)
+    r += 1
+    _put(ws, f"A{r}", "용역(계약) 기간", font=_BOLD)
+    _put(ws, f"B{r}", "")  # 데이터 없음(양식 자리만)
+    r += 2
+
+    # ---- 항목 표 ----------------------------------------------------
+    headers = ["No", "품목", "규격", "수량", "단가", "공급가액", "세액", "비고"]
+    # 품목 2칸(B:C) 병합 → 실제 열 매핑
+    ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=3)
+    col_map = [1, 2, 4, 5, 6, 7, 8, 9]
+    for h, col in zip(headers, col_map):
+        _put(ws, f"{get_column_letter(col)}{r}", h, font=_BOLD, align=_CENTER, box=True, fill=True)
+    ws[f"C{r}"].border = _BOX
+    r += 1
+
+    for it in q.items:
+        line_vat = round(it.line_amount * VAT_RATE)
+        ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=3)
+        _put(ws, f"A{r}", it.line_no, align=_CENTER, box=True)
+        _put(ws, f"B{r}", it.name, align=_LEFT, box=True)
+        ws[f"C{r}"].border = _BOX
+        _put(ws, f"D{r}", "", box=True)  # 규격
+        _put(ws, f"E{r}", it.qty, align=_RIGHT, box=True).number_format = "#,##0"
+        _put(ws, f"F{r}", it.unit_price, align=_RIGHT, box=True).number_format = _WON
+        _put(ws, f"G{r}", it.line_amount, align=_RIGHT, box=True).number_format = _WON
+        _put(ws, f"H{r}", line_vat, align=_RIGHT, box=True).number_format = _WON
+        _put(ws, f"I{r}", "", box=True)  # 비고
+        r += 1
+    r += 1
+
+    # ---- 합계 블록 ------------------------------------------------
+    def sum_row(label: str, value: int, *, bold=False) -> None:
         nonlocal r
-        ws.cell(row=r, column=4, value=label).font = _BOLD
-        vc = ws.cell(row=r, column=5, value=value)
+        f = Font(bold=True) if bold else None
+        _put(ws, f"F{r}", label, font=f or _BOLD, align=_RIGHT)
+        ws.merge_cells(start_row=r, start_column=7, end_row=r, end_column=8)
+        vc = _put(ws, f"G{r}", value, font=f, align=_RIGHT)
         vc.number_format = _WON
         r += 1
 
-    money_row("항목 합계", q.items_raw_total)
-    money_row("공급가액 합계(십만단위 절사)", q.supply_amount)
-    money_row("부가세 (10%)", q.vat_amount)
-    money_row("부가세 포함가", q.total_with_vat)
+    sum_row("공급가액 합계 (십만단위 절사)", q.supply_amount)
+    sum_row("세액 (10%)", q.vat_amount)
+    sum_row("합계금액", q.total_with_vat, bold=True)
+    _put(
+        ws, f"A{r}",
+        f"* 항목 합계 {q.items_raw_total:,}원 · 합계는 총액 기준 십만단위 절사. "
+        + ("부가세 포함 견적(고객 실지불액 = 합계금액)." if q.vat_included
+           else "부가세 미포함(별도) 견적."),
+        font=_ITALIC,
+    )
+    r += 2
+
+    # ---- 대금결제조건 / 납품조건 / WORK SCOPE -------------------
+    for i, (label, text) in enumerate(QUOTE_CONDITIONS, start=3):
+        _put(ws, f"A{r}", f"{i}. {label}", font=_BOLD)
+        ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=_NCOLS)
+        _put(ws, f"B{r}", text, align=_LEFT)
+        r += 1
     r += 1
-    ws.cell(
-        row=r, column=1,
-        value=("부가세 포함 견적입니다. 고객 실지불액은 '부가세 포함가' 기준입니다."
-               if q.vat_included
-               else "부가세 미포함(별도) 견적입니다. 공급가액 기준이며 부가세는 별도입니다."),
-    ).font = Font(italic=True)
+
+    # ---- 서명란 -------------------------------------------------
+    _put(ws, f"F{r}", "결재", font=_BOLD, align=_CENTER, box=True, fill=True)
+    for j, col in enumerate(QUOTE_SIGNOFF_COLS):
+        cl = get_column_letter(7 + j)
+        _put(ws, f"{cl}{r}", col, font=_BOLD, align=_CENTER, box=True, fill=True)
+    r += 1
+    ws.row_dimensions[r].height = 44
+    _put(ws, f"F{r}", "", box=True)
+    for j in range(len(QUOTE_SIGNOFF_COLS)):
+        _put(ws, f"{get_column_letter(7 + j)}{r}", "", box=True)
 
     buf = io.BytesIO()
     wb.save(buf)

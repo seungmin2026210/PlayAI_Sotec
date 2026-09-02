@@ -107,8 +107,19 @@ label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--
 .detail-grid dt { color: var(--muted); }
 .detail-grid dd { margin: 0; }
 
-.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.toolbar .sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 4px; }
+/* 상세화면 액션: 문서용 버튼은 오른쪽 위(page-head), 상태변경 버튼은 오른쪽 아래 */
+.head-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; align-items: flex-start; }
+.detail-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+/* 견적 항목 표 하단 합계(tfoot) — 별도 표 대신 항목 표에 통합 */
+.quote-items tfoot th { text-align: right; padding: 7px 10px; color: var(--muted); font-weight: 500; }
+.quote-items tfoot td.num { padding: 7px 10px; font-variant-numeric: tabular-nums; }
+.quote-items tfoot tr.total th, .quote-items tfoot tr.total td {
+  font-weight: 700; color: var(--text); border-top: 2px solid var(--text);
+}
+.quote-items tfoot tr.foot-note td {
+  padding-top: 8px; border: none; color: var(--muted); font-size: 12px; text-align: right;
+}
 
 .badge {
   display: inline-block; padding: 2px 9px; border-radius: 999px;

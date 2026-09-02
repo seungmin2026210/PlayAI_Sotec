@@ -120,50 +120,22 @@ export function QuoteDetail() {
             {quote.updated_at && ` / 수정 ${new Date(quote.updated_at).toLocaleString("ko-KR")}`}
           </p>
         </div>
-        <button className="ghost" onClick={() => navigate("/quotes")}>
-          목록으로
-        </button>
-      </div>
-
-      <div className="toolbar card">
-        <button onClick={() => dl(() => downloadQuoteXlsx(quoteId))}>엑셀</button>
-        <button onClick={() => dl(() => downloadQuotePdf(quoteId))}>PDF</button>
-        <SuperAdminOnly>
-          <span className="sep" />
-          <button
-            disabled={!canEditDelete || busy}
-            onClick={() => navigate(`/quotes/${quoteId}/edit`)}
-          >
-            수정
+        <div className="head-actions">
+          <button onClick={() => dl(() => downloadQuoteXlsx(quoteId))}>엑셀</button>
+          <button onClick={() => dl(() => downloadQuotePdf(quoteId))}>PDF</button>
+          <SuperAdminOnly>
+            <button onClick={onSend}>개인메일 발송</button>
+            <button
+              disabled={!canEditDelete || busy}
+              onClick={() => navigate(`/quotes/${quoteId}/edit`)}
+            >
+              수정
+            </button>
+          </SuperAdminOnly>
+          <button className="ghost" onClick={() => navigate("/quotes")}>
+            목록으로
           </button>
-          <button
-            className="primary"
-            disabled={!canApproveReject || busy}
-            onClick={() => run(() => approveQuote(quoteId), "승인했습니다.")}
-          >
-            승인
-          </button>
-          <button className="warn" disabled={!canApproveReject || busy} onClick={onReject}>
-            반려
-          </button>
-          <button disabled={!canCancel || busy} onClick={() => run(() => cancelQuote(quoteId), "취소 처리했습니다.")}>
-            취소
-          </button>
-          <button
-            disabled={quote.purchase_locked || busy}
-            title="구매관리 데이터 반영(자리표시) — 반영 시 읽기전용 잠금"
-            onClick={() =>
-              run(() => purchaseLockQuote(quoteId), "구매관리 반영으로 잠금되었습니다.")
-            }
-          >
-            구매관리 반영(잠금)
-          </button>
-          <button className="danger" disabled={!canEditDelete || busy} onClick={onDelete}>
-            삭제
-          </button>
-          <span className="sep" />
-          <button onClick={onSend}>개인메일 발송</button>
-        </SuperAdminOnly>
+        </div>
       </div>
 
       {quote.status === "REJECTED" && quote.reject_reason && (
@@ -222,7 +194,7 @@ export function QuoteDetail() {
 
       <div className="card">
         <h2>견적 항목</h2>
-        <table className="list-table">
+        <table className="list-table quote-items">
           <thead>
             <tr>
               <th>No</th>
@@ -243,34 +215,66 @@ export function QuoteDetail() {
               </tr>
             ))}
           </tbody>
-        </table>
-
-        <table className="preview">
-          <tbody>
+          <tfoot>
             <tr>
-              <th>항목 합계</th>
-              <td>{formatWon(quote.items_raw_total)}</td>
-            </tr>
-            <tr>
+              <td colSpan={3} />
               <th>공급가액 합계 (십만단위 절사)</th>
-              <td>{formatWon(quote.supply_amount)}</td>
+              <td className="num">{formatWon(quote.supply_amount)}</td>
             </tr>
             <tr>
-              <th>부가세 (10%)</th>
-              <td>{formatWon(quote.vat_amount)}</td>
+              <td colSpan={3} />
+              <th>세액 (10%)</th>
+              <td className="num">{formatWon(quote.vat_amount)}</td>
             </tr>
             <tr className="total">
-              <th>부가세 포함가</th>
-              <td>{formatWon(quote.total_with_vat)}</td>
+              <td colSpan={3} />
+              <th>합계금액</th>
+              <td className="num">{formatWon(quote.total_with_vat)}</td>
             </tr>
-          </tbody>
+            <tr className="foot-note">
+              <td colSpan={5}>
+                항목 합계 {formatWon(quote.items_raw_total)} · 합계는 총액 기준 십만단위 절사 ·{" "}
+                {quote.vat_included
+                  ? "부가세 포함 견적(고객 실지불액 = 합계금액)"
+                  : "부가세 미포함(별도) 견적"}
+              </td>
+            </tr>
+          </tfoot>
         </table>
-        {quote.vat_included ? (
-          <p className="muted">부가세 포함 견적 · 고객 실지불액은 부가세 포함가 기준입니다.</p>
-        ) : (
-          <p className="muted">부가세 미포함(별도) 견적 · 공급가액 기준이며 부가세는 별도입니다.</p>
-        )}
       </div>
+
+      <SuperAdminOnly>
+        <div className="detail-actions">
+          <button
+            className="primary"
+            disabled={!canApproveReject || busy}
+            onClick={() => run(() => approveQuote(quoteId), "승인했습니다.")}
+          >
+            승인
+          </button>
+          <button className="warn" disabled={!canApproveReject || busy} onClick={onReject}>
+            반려
+          </button>
+          <button
+            disabled={!canCancel || busy}
+            onClick={() => run(() => cancelQuote(quoteId), "취소 처리했습니다.")}
+          >
+            취소
+          </button>
+          <button
+            disabled={quote.purchase_locked || busy}
+            title="구매관리 데이터 반영(자리표시) — 반영 시 읽기전용 잠금"
+            onClick={() =>
+              run(() => purchaseLockQuote(quoteId), "구매관리 반영으로 잠금되었습니다.")
+            }
+          >
+            구매관리 반영(잠금)
+          </button>
+          <button className="danger" disabled={!canEditDelete || busy} onClick={onDelete}>
+            삭제
+          </button>
+        </div>
+      </SuperAdminOnly>
     </div>
   );
 }
