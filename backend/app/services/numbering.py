@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from ..config import SEQ_MAX
+from ..config import MGMT_NO_DISPLAY_PREFIX, SEQ_MAX
 from ..errors import SEQ_EXHAUSTED, AppError
 from ..models import NumberSequence, RetiredNumber
 
@@ -35,6 +35,16 @@ def _now() -> datetime:
 
 def format_mgmt_no(year: int, group_code: str, seq_no: int) -> str:
     return f"{year % 100:02d}-{group_code}-{seq_no:03d}"
+
+
+def format_mgmt_no_display(seq_year: int, group_code: str, seq_no: int) -> str:
+    """출력물(엑셀/PDF)용 견적NO 표기 — '혁신 2026-B 008' 꼴.
+
+    저장 mgmt_no(26-B-008)와 채번 로직은 그대로 두고 표기만 바꾼다. 접두어는
+    config.MGMT_NO_DISPLAY_PREFIX. 그룹별 독립 채번이라 (그룹, 연도) 조합의 순번이다.
+    """
+    year = seq_year if seq_year >= 100 else 2000 + seq_year
+    return f"{MGMT_NO_DISPLAY_PREFIX} {year}-{group_code} {seq_no:03d}"
 
 
 def allocate(db: Session, group_code: str, *, now: datetime | None = None) -> Allocation:

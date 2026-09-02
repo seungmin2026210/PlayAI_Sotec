@@ -7,6 +7,7 @@ os.environ.setdefault("QUOTE_TESTING", "1")
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 from app.database import Base, SessionLocal, engine
 from app import models  # noqa: F401
@@ -17,7 +18,10 @@ _TABLES = ["quote_items", "quotes", "retired_numbers", "number_sequences"]
 
 @pytest.fixture(scope="session", autouse=True)
 def _schema():
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except OperationalError as exc:  # 테스트 DB 없음 — DB 불필요한 테스트(test_export 등)만 실행
+        pytest.skip(f"test DB unavailable: {exc}")
     yield
     # 세션 종료 시 스키마는 남겨둔다(재실행 시 재사용).
 
