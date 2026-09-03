@@ -72,7 +72,7 @@ export function QuoteList() {
   const curPage = applied.page ?? 1;
 
   return (
-    <div className="page">
+    <div className="page page-full">
       <div className="page-head">
         <div>
           <h1>견적서 목록</h1>

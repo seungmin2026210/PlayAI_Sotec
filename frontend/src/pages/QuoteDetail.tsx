@@ -107,7 +107,7 @@ export function QuoteDetail() {
   const canEditDelete = !quote.read_only;
 
   return (
-    <div className="page">
+    <div className="page page-full">
       <div className="page-head">
         <div>
           <h1>

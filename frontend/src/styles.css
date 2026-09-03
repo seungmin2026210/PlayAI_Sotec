@@ -53,6 +53,7 @@ label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--
 /* 기존 상단바(Shell)는 design/AppShell.tsx 의 사이드바 레이아웃으로 대체됨 —
    app-bar/brand/who/role-tag 클래스와 전역 main{} 규칙은 여기서 제거. */
 .page { display: flex; flex-direction: column; gap: 16px; max-width: 1120px; margin: 0 auto; }
+.page.page-full { max-width: none; }
 .page-head { display: flex; justify-content: space-between; align-items: flex-start; }
 .page-head h1 { margin: 0 0 2px; font-size: 20px; }
 .muted { color: var(--muted); font-size: 13px; margin: 2px 0; }
