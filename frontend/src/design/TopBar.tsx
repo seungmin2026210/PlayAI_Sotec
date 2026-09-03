@@ -43,7 +43,7 @@ function SearchInput({ placeholder }: { placeholder: string }) {
       <Icon name="Search" size={20} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
       <input
         placeholder={placeholder}
-        style={{ border: "none", outline: "none", flex: 1, background: "transparent", fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--slate-600)" }}
+        style={{ border: "none", outline: "none", flex: 1, background: "transparent", fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--slate-600)" }}
       />
     </div>
   );
@@ -93,10 +93,10 @@ export function TopBar({ isMobile, onToggleMobileNav, user, onLogout }: TopBarPr
         <div style={{ display: "flex", alignItems: "center", gap: 10, height: "100%" }}>
           <Avatar name={user.display_name} size={36} />
           <div>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text-heading-alt)", whiteSpace: "nowrap" }}>
+            <div style={{ fontSize: 14.5, fontWeight: 700, color: "var(--text-heading-alt)", whiteSpace: "nowrap" }}>
               {user.display_name}
             </div>
-            <div style={{ fontSize: 11.5, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{roleLabel}</div>
+            <div style={{ fontSize: 12.5, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{roleLabel}</div>
           </div>
         </div>
         <button
@@ -107,7 +107,7 @@ export function TopBar({ isMobile, onToggleMobileNav, user, onLogout }: TopBarPr
             borderRadius: "var(--radius-sm)",
             padding: "7px 14px",
             fontFamily: "var(--font-sans)",
-            fontSize: 12.5,
+            fontSize: 13.5,
             fontWeight: 600,
             color: "var(--text-muted)",
             cursor: "pointer",

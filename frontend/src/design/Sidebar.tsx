@@ -125,7 +125,7 @@ export function Sidebar({ collapsed: collapsedProp, onToggleCollapsed, isMobile,
             >
               <Icon name="FiRrHome" size={22} style={{ color: isDashboard ? "var(--color-primary)" : "var(--text-muted)", flexShrink: 0 }} />
               {showLabels && (
-                <span style={{ fontSize: 14, fontWeight: isDashboard ? 700 : 500, whiteSpace: "nowrap" }}>대시보드</span>
+                <span style={{ fontSize: 15, fontWeight: isDashboard ? 700 : 500, whiteSpace: "nowrap" }}>대시보드</span>
               )}
             </div>
 
@@ -135,7 +135,7 @@ export function Sidebar({ collapsed: collapsedProp, onToggleCollapsed, isMobile,
             >
               <Icon name="FiRrChartHistogram" size={22} style={{ color: groupActive ? "var(--color-primary)" : "var(--text-muted)", flexShrink: 0 }} />
               {showLabels && (
-                <span style={{ fontSize: 14, fontWeight: groupActive ? 700 : 500, flex: 1, whiteSpace: "nowrap" }}>계약관리</span>
+                <span style={{ fontSize: 15, fontWeight: groupActive ? 700 : 500, flex: 1, whiteSpace: "nowrap" }}>계약관리</span>
               )}
             </div>
 
@@ -150,7 +150,7 @@ export function Sidebar({ collapsed: collapsedProp, onToggleCollapsed, isMobile,
                       style={{ ...navRowBase, paddingLeft: collapsed ? 12 : 44, ...(active ? onStyle : offStyle) }}
                     >
                       <Icon name={item.icon} size={20} style={{ color: active ? "var(--color-primary)" : "var(--text-muted)", flexShrink: 0 }} />
-                      <span style={{ fontSize: 14, fontWeight: active ? 700 : 500, whiteSpace: "nowrap" }}>{item.label}</span>
+                      <span style={{ fontSize: 15, fontWeight: active ? 700 : 500, whiteSpace: "nowrap" }}>{item.label}</span>
                     </div>
                   );
                 })}
@@ -166,7 +166,7 @@ export function Sidebar({ collapsed: collapsedProp, onToggleCollapsed, isMobile,
               style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: 10, borderRadius: "var(--radius-md)", cursor: "pointer", color: "var(--text-muted)" }}
             >
               <Icon name="FiRrAngleUp" size={16} style={{ color: "var(--text-muted)", transform: collapsed ? "rotate(90deg)" : "rotate(-90deg)" }} />
-              {showLabels && <span style={{ fontSize: 12.5, fontWeight: 600 }}>접기</span>}
+              {showLabels && <span style={{ fontSize: 13.5, fontWeight: 600 }}>접기</span>}
             </div>
           )}
         </div>
