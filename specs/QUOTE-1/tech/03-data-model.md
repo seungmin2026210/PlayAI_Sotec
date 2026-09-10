@@ -1,5 +1,7 @@
 # 03. 데이터 모델
 
+> **PostgreSQL 테이블 설계는 폐기됨 — Firestore 문서 스키마로 전환.** 아래는 원 설계(개념/제약조건 참고용). 실제 컬렉션/문서 구조는 [`12-firestore-migration.md` § 1~4](./12-firestore-migration.md)가 정본.
+
 ## 테이블
 
 ### `quotes`

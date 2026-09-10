@@ -1,5 +1,7 @@
 # 02. 아키텍처
 
+> **DB 는 PostgreSQL 이 아니라 Firestore 로 전환됨** — 아래 다이어그램/세션 흐름은 SQLAlchemy 시절 설명. 현재 구현은 [`12-firestore-migration.md`](./12-firestore-migration.md) 참고. 계층 규칙(라우터/서비스 분리)은 그대로 유효.
+
 ## 개요
 
 ```

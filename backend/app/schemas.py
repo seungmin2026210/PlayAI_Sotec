@@ -109,7 +109,7 @@ class RejectRequest(BaseModel):
 class QuoteRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    id: str  # Firestore 문서ID == mgmt_no (12-firestore-migration.md § 1, § 7)
     mgmt_no: str
     seq_year: int
     group_code: str
@@ -151,7 +151,7 @@ class QuoteRead(BaseModel):
 class QuoteListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    id: str
     mgmt_no: str
     group_code: str
     group_name: str

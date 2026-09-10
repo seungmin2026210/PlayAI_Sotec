@@ -17,11 +17,13 @@ def require_super_admin(user = Depends(get_current_user)):
         raise AppError("FORBIDDEN_ROLE", 403, "조회 전용 권한입니다.")
     return user
 
-def apply_scope(query, user):
-    # 그룹관리자: 본인 그룹으로 강제 필터. 전체관리자: 무제한.
+def scope_group(user) -> str | None:
+    # 그룹관리자: 본인 그룹 코드 반환(services/query.py 가 이 값으로 Firestore 등호 필터).
+    # 전체관리자: None(무제한). Firestore 전환 전에는 SQL Select에 .where(...)를 얹는
+    # apply_scope(query, user) 였음(12-firestore-migration.md 참고).
     if user.role == "GROUP_MANAGER":
-        return query.where(Quote.group_code == user.group_code)
-    return query
+        return user.group_code
+    return None
 
 def assert_can_view(quote, user):
     if user.role == "GROUP_MANAGER" and quote.group_code != user.group_code:

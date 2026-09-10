@@ -32,6 +32,25 @@
 | 견적NO 표기 | 저장값 `26-B-008` 유지, export 표시만 `혁신 2026-B 008` (`config.MGMT_NO_DISPLAY_PREFIX`) | 채번 로직 불변, 표기만 실사용 형식 |
 | 승인 견적서 직인 | `status=APPROVED` 인 엑셀·PDF 에만 `config.SEAL_PATH` 직인 합성. 현재는 `scripts/make_seal.py` 임시 "SOTEC" 직인 → 실제 직인 오면 같은 경로 파일 교체 | 승인 완료 문서만 날인, 실직인 교체를 파일 1개로 |
 | 라인별 세액 | 항목표 세액열은 `round(금액×0.1)` 참고 표시. 총계(절사·세액·합계)는 `calculation` 서비스가 정본 | 서식상 열은 채우되 세금계산서 정본 아님 |
+| PDF export 구현체 | WeasyPrint(HTML→PDF) → **reportlab**(Platypus, 순수 파이썬)로 교체. 한글 폰트(나눔고딕)를 `app/assets/fonts/`에 파일로 두고 PDF에 직접 임베드 | 배포를 Vercel(서버리스)로 정하면서, WeasyPrint 가 요구하는 시스템 라이브러리(`libpango` 등)를 서버리스 함수에 설치할 수 없어 교체 필요. 순수 파이썬 + 폰트 임베드는 실행 환경(OS/시스템 라이브러리) 전혀 안 가림 |
+
+## 배포 아키텍처 전환 (DB 레이어 마이그레이션 완료 — 2026-09)
+
+상세 설계·실측 결과: [`tech/12-firestore-migration.md`](./tech/12-firestore-migration.md).
+
+- **결정**: 배포는 **Vercel**(프론트 + 백엔드), DB 는 **Firebase(Firestore)** 로 확정.
+- `backend/app/models.py`(→ dataclass) / `database.py`(→ Firestore client) / `deps.py` /
+  `routers/*` / `services/numbering.py`(→ Firestore 트랜잭션) 전부 재작성 완료. Alembic·
+  PostgreSQL·docker-compose 제거. `pytest` 30개 전부 통과, 프론트 `id` 타입(문자열) 반영 완료.
+- 채번(`YY-그룹코드-순번`) 동시성: `number_sequences` 문서를 Firestore 트랜잭션으로 read-then-write.
+  **실측 결과**: 같은 문서에 스레드 4개 이상이 진짜 동시에 몰리면 SDK 기본 재시도로는 부족해
+  일부 요청이 완전히 실패하는 걸 확인 → `database.run_transaction()`에 애플리케이션 레벨 재시도
+  (지수백오프+지터)를 추가해 2~15 스레드 동시 채번을 중복/결번/실패 없이 통과시킴(tech/12 § 5).
+- PDF export 는 이 결정에 맞춰 이미 reportlab 로 전환 완료. WeasyPrint 는 제거됨.
+- **남은 것**(tech/12 § 10-9,10): `firestore.indexes.json` 실배포, Vercel 배포 토폴로지 확정
+  (백엔드를 Vercel Functions 로 올릴지 Cloud Run 등 컨테이너로 올릴지 — 아직 미정), 서비스
+  계정/환경변수 실제 설정. `backend/Dockerfile`은 컨테이너 호스팅 전제라 Vercel Functions 로
+  가면 안 쓰게 될 수 있음.
 
 ## 검토 요청 항목 (협의 시 우선)
 

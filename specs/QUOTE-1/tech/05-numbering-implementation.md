@@ -1,5 +1,7 @@
 # 05. 관리번호 채번 구현
 
+> **`SELECT ... FOR UPDATE` 는 Firestore 트랜잭션으로 교체됨.** 형식(`YY-그룹코드-순번`)·연도 기준·결번 정책은 동일하게 유지. 실제 구현은 [`12-firestore-migration.md` § 5`](./12-firestore-migration.md)(동시성 실측 결과 포함) 참고.
+
 ## 형식
 
 `f"{yy:02d}-{group_code}-{seq:03d}"` — `yy = year % 100`, `seq` 1..999.

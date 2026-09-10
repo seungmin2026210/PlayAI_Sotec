@@ -1,18 +1,16 @@
-"""데모 데이터 시드. `alembic upgrade head` 이후 실행.
+"""데모 데이터 시드.
 
   python seed.py            # 기존 데이터 유지, 없으면 샘플 생성
-  python seed.py --reset    # quotes/items/sequences/retired 전부 삭제 후 재생성
+  python seed.py --reset    # quotes/number_sequences/retired_numbers 전부 삭제 후 재생성
 """
 from __future__ import annotations
 
 import sys
-from datetime import date
-
-from sqlalchemy import delete, select
+from datetime import date, datetime, timezone
 
 from app.config import STATUS_SUBMITTED
-from app.database import SessionLocal
-from app.models import NumberSequence, Quote, QuoteItem, RetiredNumber
+from app.database import get_client, run_transaction
+from app.models import Quote, QuoteItem
 from app.services import numbering
 from app.services.calculation import compute
 
@@ -46,17 +44,15 @@ class _I:
         self.name, self.qty, self.unit_price = name, qty, unit_price
 
 
-def reset(db) -> None:
-    db.execute(delete(QuoteItem))
-    db.execute(delete(Quote))
-    db.execute(delete(RetiredNumber))
-    db.execute(delete(NumberSequence))
-    db.commit()
+def reset(client) -> None:
+    for name in ("quotes", "number_sequences", "retired_numbers"):
+        for doc in client.collection(name).stream():
+            doc.reference.delete()
     print("reset: 기존 데이터 삭제 완료")
 
 
-def seed(db) -> None:
-    existing = db.execute(select(Quote.id).limit(1)).first()
+def seed(client) -> None:
+    existing = next(iter(client.collection("quotes").limit(1).stream()), None)
     if existing:
         print("seed: 기존 견적서가 있어 건너뜁니다. (--reset 으로 초기화 가능)")
         return
@@ -64,36 +60,49 @@ def seed(db) -> None:
     for s in SAMPLES:
         items = [_I(*t) for t in s["items"]]
         c = compute(items)
-        alloc = numbering.allocate(db, s["group_code"], now=None)
-        q = Quote(
-            mgmt_no=alloc.mgmt_no, seq_year=alloc.seq_year,
-            group_code=alloc.group_code, seq_no=alloc.seq_no,
-            title=s["title"], issue_date=s["issue_date"], issuer_name=s["issuer_name"],
-            customer_name=s["customer_name"],
-            customer_contact_name=s["customer_contact_name"],
-            customer_contact_phone=s["customer_contact_phone"],
-            vat_included=s["vat_included"],
-            supply_amount=c.supply_amount, vat_amount=c.vat_amount,
-            total_with_vat=c.total_with_vat, items_raw_total=c.raw_total,
-            status=STATUS_SUBMITTED, purchase_locked=False, created_by="Admin",
-        )
-        for idx, it in enumerate(items, start=1):
-            q.items.append(QuoteItem(
-                line_no=idx, name=it.name, qty=it.qty,
-                unit_price=it.unit_price, line_amount=it.qty * it.unit_price,
-            ))
-        db.add(q)
-        db.commit()
+        now = datetime.now(timezone.utc)
+
+        def _txn(transaction, s=s, items=items, c=c, now=now):
+            alloc = numbering.allocate_in(transaction, client, s["group_code"], now=now)
+            quote = Quote(
+                id=alloc.mgmt_no,
+                mgmt_no=alloc.mgmt_no,
+                seq_year=alloc.seq_year,
+                group_code=alloc.group_code,
+                seq_no=alloc.seq_no,
+                title=s["title"],
+                issue_date=s["issue_date"],
+                issuer_name=s["issuer_name"],
+                customer_name=s["customer_name"],
+                customer_contact_name=s["customer_contact_name"],
+                customer_contact_phone=s["customer_contact_phone"],
+                vat_included=s["vat_included"],
+                supply_amount=c.supply_amount,
+                vat_amount=c.vat_amount,
+                total_with_vat=c.total_with_vat,
+                items_raw_total=c.raw_total,
+                items=[
+                    QuoteItem(line_no=idx, name=it.name, qty=it.qty, unit_price=it.unit_price,
+                              line_amount=it.qty * it.unit_price)
+                    for idx, it in enumerate(items, start=1)
+                ],
+                status=STATUS_SUBMITTED,
+                purchase_locked=False,
+                active=True,
+                created_by="Admin",
+                created_at=now,
+            )
+            transaction.set(client.collection("quotes").document(alloc.mgmt_no), quote.to_dict())
+            return alloc
+
+        alloc = run_transaction(client, _txn)
         print(f"seed: {alloc.mgmt_no}  {s['title']}")
 
     print("seed: 완료")
 
 
 if __name__ == "__main__":
-    db = SessionLocal()
-    try:
-        if "--reset" in sys.argv:
-            reset(db)
-        seed(db)
-    finally:
-        db.close()
+    client = get_client()
+    if "--reset" in sys.argv:
+        reset(client)
+    seed(client)
