@@ -14,8 +14,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = "postgresql+psycopg://quote:quote@localhost:5432/quote"
-    database_url_test: str = "postgresql+psycopg://quote:quote@localhost:5432/quote_test"
+    # Firestore. 로컬/테스트는 FIRESTORE_EMULATOR_HOST 환경변수만 있으면 이 프로젝트ID로도
+    # 에뮬레이터에 붙는다(인증 불필요, google-cloud-firestore 가 해당 변수를 자동 인식).
+    # 배포(실제 Firestore) 시엔 이 값을 실제 Firebase 프로젝트ID로, 서비스 계정 인증정보는
+    # GOOGLE_APPLICATION_CREDENTIALS(파일 경로) 또는 GOOGLE_APPLICATION_CREDENTIALS_JSON
+    # (Vercel 환경변수, 내용 그대로)으로 준다. 12-firestore-migration.md § 9.
+    firebase_project_id: str = "quote-dev"
+    # .env 로만 지정 가능(pydantic-settings 는 .env 를 os.environ 에 반영하지 않으므로
+    # database.get_client() 가 이 값을 읽어 직접 os.environ 에 넣어준다).
+    firestore_emulator_host: str | None = None
     cors_origins: str = "http://localhost:5173"
     token_secret: str = "dev-secret-change-me"
     token_ttl_hours: int = 12
@@ -89,6 +96,12 @@ LOGO_PATH: Path = Path(__file__).resolve().parent / "assets" / "sotec-logo.png"
 #   같은 경로에 파일만 교체하면 된다(크기가 달라도 SEAL_MM 으로 흡수).
 SEAL_PATH: Path = Path(__file__).resolve().parent / "assets" / "sotec-seal.png"
 SEAL_MM: float = 22.0            # 출력물에서 직인 한 변 길이(mm). 실제 직인 비율에 맞게 조정.
+
+# PDF export(services/export_pdf.py) 한글 폰트. reportlab 로 PDF 안에 직접 임베드해서
+# 시스템에 한글 폰트/네이티브 라이브러리가 전혀 없어도(Vercel Serverless 등) 동작하게 한다.
+# 나눔고딕(SIL OFL, 재배포 가능) — 교체 시 이 두 파일만 바꾸면 됨.
+FONT_REGULAR_PATH: Path = Path(__file__).resolve().parent / "assets" / "fonts" / "NanumGothic-Regular.ttf"
+FONT_BOLD_PATH: Path = Path(__file__).resolve().parent / "assets" / "fonts" / "NanumGothic-Bold.ttf"
 
 # ---------------------------------------------------------------------------
 # 견적서 출력물(엑셀/PDF) 정형 문구 — 실제 견적서.jpg 에서 전사.

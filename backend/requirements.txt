@@ -1,14 +1,12 @@
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
-SQLAlchemy==2.0.36
-psycopg[binary]==3.2.3
-alembic==1.14.0
+google-cloud-firestore==2.30.0  # DB. 로컬/테스트는 FIRESTORE_EMULATOR_HOST 로 에뮬레이터 사용
 pydantic==2.10.4
 pydantic-settings==2.7.0
 python-multipart==0.0.20
 itsdangerous==2.2.0
 openpyxl==3.1.5
 Pillow==12.3.0   # openpyxl 이미지(로고/인감) 삽입 + scripts/make_seal.py 임시 직인 생성. 미설치여도 export 는 조용히 로고/인감 생략
-weasyprint==69.0 # PDF. Windows 는 GTK3 런타임(libgobject 등) 필요 — winget: tschoonj.GTKForWindows. 미충족 시 501 PDF_UNAVAILABLE 로 폴백
+reportlab==4.2.5 # PDF. 순수 파이썬(네이티브 라이브러리 의존 없음) — Vercel Serverless 등에서도 동작. 한글 폰트는 app/assets/fonts 에 임베드
 pytest==8.3.4
 httpx==0.28.1

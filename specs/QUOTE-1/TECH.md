@@ -18,6 +18,7 @@
 | 09 | [tech/09-export.md](./tech/09-export.md) | 엑셀/PDF export 구현 |
 | 10 | [tech/10-provisional-decisions.md](./tech/10-provisional-decisions.md) | 미정(❓) → 임시 결정 대응표 |
 | 11 | [tech/11-testing-plan.md](./tech/11-testing-plan.md) | 테스트 전략, 검증 항목 |
+| 12 | [tech/12-firestore-migration.md](./tech/12-firestore-migration.md) | **DB 를 PostgreSQL→Firestore 로 전환(완료)**. 02/03/05 는 이 문서가 최신화 |
 
 ## 구현 순서 (실제 진행)
 

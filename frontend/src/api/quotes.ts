@@ -11,7 +11,7 @@ export function listQuotes(filters: ListFilters): Promise<QuoteListResponse> {
   return apiGet<QuoteListResponse>(`/api/quotes${buildQuery(filters as Record<string, unknown>)}`);
 }
 
-export function getQuote(id: number): Promise<Quote> {
+export function getQuote(id: string): Promise<Quote> {
   return apiGet<Quote>(`/api/quotes/${id}`);
 }
 
@@ -19,39 +19,39 @@ export function createQuote(payload: QuotePayload): Promise<Quote> {
   return apiSend<Quote>("POST", "/api/quotes", payload);
 }
 
-export function updateQuote(id: number, payload: QuotePayload): Promise<Quote> {
+export function updateQuote(id: string, payload: QuotePayload): Promise<Quote> {
   return apiSend<Quote>("PUT", `/api/quotes/${id}`, payload);
 }
 
-export function deleteQuote(id: number): Promise<MessageResponse> {
+export function deleteQuote(id: string): Promise<MessageResponse> {
   return apiSend<MessageResponse>("DELETE", `/api/quotes/${id}`);
 }
 
-export function approveQuote(id: number): Promise<Quote> {
+export function approveQuote(id: string): Promise<Quote> {
   return apiSend<Quote>("POST", `/api/quotes/${id}/approve`);
 }
 
-export function rejectQuote(id: number, reason: string): Promise<Quote> {
+export function rejectQuote(id: string, reason: string): Promise<Quote> {
   return apiSend<Quote>("POST", `/api/quotes/${id}/reject`, { reason });
 }
 
-export function cancelQuote(id: number): Promise<Quote> {
+export function cancelQuote(id: string): Promise<Quote> {
   return apiSend<Quote>("POST", `/api/quotes/${id}/cancel`);
 }
 
-export function purchaseLockQuote(id: number): Promise<Quote> {
+export function purchaseLockQuote(id: string): Promise<Quote> {
   return apiSend<Quote>("POST", `/api/quotes/${id}/purchase-lock`);
 }
 
-export function sendQuote(id: number): Promise<MessageResponse> {
+export function sendQuote(id: string): Promise<MessageResponse> {
   return apiSend<MessageResponse>("POST", `/api/quotes/${id}/send`);
 }
 
-export function downloadQuoteXlsx(id: number): Promise<void> {
+export function downloadQuoteXlsx(id: string): Promise<void> {
   return apiDownload(`/api/quotes/${id}/export.xlsx`);
 }
 
-export function downloadQuotePdf(id: number): Promise<void> {
+export function downloadQuotePdf(id: string): Promise<void> {
   return apiDownload(`/api/quotes/${id}/export.pdf`);
 }
 

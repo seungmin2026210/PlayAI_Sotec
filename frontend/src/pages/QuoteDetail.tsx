@@ -20,7 +20,7 @@ import type { Quote } from "../types";
 
 export function QuoteDetail() {
   const { id } = useParams();
-  const quoteId = Number(id);
+  const quoteId = id ?? ""; // Firestore 문서ID(mgmt_no) 문자열 그대로 사용
   const navigate = useNavigate();
   const toast = useToast();
 

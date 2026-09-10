@@ -1,24 +1,28 @@
-"""관리번호 채번 — 기획서 6장 / TECH 05.
+"""관리번호 채번 — 기획서 6장 / TECH 05, 12(Firestore 트랜잭션).
 
 형식 YY-그룹코드-순번 (예: 26-A-001).
 - YY = 등록 시각(서버) 연도의 뒤 2자리 (발행일자 아님).
 - (연도, 그룹) 조합별 독립 시퀀스. 연도 바뀌면 001부터.
-- 동시성: number_sequences 행을 SELECT ... FOR UPDATE 로 잠근 뒤 +1.
+- 동시성: `number_sequences/{year}-{group_code}` 문서를 Firestore 트랜잭션(낙관적,
+  충돌 시 클라이언트가 자동 재시도)으로 읽고 +1 — SQL `SELECT ... FOR UPDATE` 대응.
 - 999 초과 시 SEQ_EXHAUSTED (open-11).
 - 결번: 삭제 시 last_seq 는 되돌리지 않는다(재사용 금지). retire() 는 대장만 기록.
+
+`*_in(transaction, ...)` 함수들은 **호출자가 이미 시작한 트랜잭션**에 이어붙여 쓴다 —
+예: `routers/quotes.py: create_quote`가 채번(allocate_in)과 quote 문서 생성을 하나의
+Firestore 트랜잭션으로 묶어야 Postgres 시절과 동일한 원자성이 나온다. `allocate()`/
+`retire()`(트랜잭션 없이 호출)는 단독 사용·테스트용 얇은 래퍼.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.orm import Session
+from google.cloud import firestore
 
 from ..config import MGMT_NO_DISPLAY_PREFIX, SEQ_MAX
+from ..database import run_transaction
 from ..errors import SEQ_EXHAUSTED, AppError
-from ..models import NumberSequence, RetiredNumber
 
 
 @dataclass(frozen=True)
@@ -47,57 +51,81 @@ def format_mgmt_no_display(seq_year: int, group_code: str, seq_no: int) -> str:
     return f"{MGMT_NO_DISPLAY_PREFIX} {year}-{group_code} {seq_no:03d}"
 
 
-def allocate(db: Session, group_code: str, *, now: datetime | None = None) -> Allocation:
-    """같은 트랜잭션 안에서 호출할 것. 커밋은 호출자 책임."""
+def _seq_ref(client: firestore.Client, year: int, group_code: str):
+    return client.collection("number_sequences").document(f"{year}-{group_code}")
+
+
+def allocate_in(
+    transaction: firestore.Transaction,
+    client: firestore.Client,
+    group_code: str,
+    *,
+    now: datetime | None = None,
+) -> Allocation:
+    """이미 열려 있는 트랜잭션 안에서 시퀀스만 +1. 문서 생성은 호출자가 같은
+    트랜잭션에 `transaction.set(quotes_ref.document(alloc.mgmt_no), ...)` 로 이어붙인다.
+    """
     year = (now or _now()).year
+    seq_ref = _seq_ref(client, year, group_code)
 
-    # 행이 없으면 만든다(경합 무시).
-    db.execute(
-        pg_insert(NumberSequence)
-        .values(seq_year=year, group_code=group_code, last_seq=0)
-        .on_conflict_do_nothing(index_elements=["seq_year", "group_code"])
-    )
-    db.flush()
+    snap = seq_ref.get(transaction=transaction)
+    last_seq = snap.get("last_seq") if snap.exists else 0
 
-    row = db.execute(
-        select(NumberSequence)
-        .where(
-            NumberSequence.seq_year == year,
-            NumberSequence.group_code == group_code,
-        )
-        .with_for_update()
-    ).scalar_one()
-
-    if row.last_seq >= SEQ_MAX:
+    if last_seq >= SEQ_MAX:
         raise AppError(
             SEQ_EXHAUSTED,
             409,
             f"해당 그룹/연도 관리번호가 {SEQ_MAX}건을 초과했습니다. 관리자에게 문의하세요.",
         )
 
-    row.last_seq += 1
-    seq_no = row.last_seq
-    db.flush()
+    next_seq = last_seq + 1
+    transaction.set(seq_ref, {"seq_year": year, "group_code": group_code, "last_seq": next_seq})
 
     return Allocation(
         seq_year=year,
         group_code=group_code,
-        seq_no=seq_no,
-        mgmt_no=format_mgmt_no(year, group_code, seq_no),
+        seq_no=next_seq,
+        mgmt_no=format_mgmt_no(year, group_code, next_seq),
     )
 
 
-def retire(db: Session, *, mgmt_no: str, seq_year: int, group_code: str,
-           seq_no: int, retired_by: str, reason: str = "DELETED") -> None:
-    """삭제된 관리번호를 결번 대장에 기록. last_seq 는 건드리지 않는다."""
-    db.add(
-        RetiredNumber(
-            mgmt_no=mgmt_no,
-            seq_year=seq_year,
-            group_code=group_code,
-            seq_no=seq_no,
-            retired_by=retired_by,
-            reason=reason,
-        )
+def allocate(client: firestore.Client, group_code: str, *, now: datetime | None = None) -> Allocation:
+    """독립 트랜잭션에서 채번만 수행(단독 호출·테스트용). 실제 견적 등록은
+    `routers.quotes.create_quote`가 자신의 트랜잭션 안에서 `allocate_in()`을 직접
+    호출해 채번과 quote 문서 생성을 원자적으로 묶는다."""
+    return run_transaction(client, lambda txn: allocate_in(txn, client, group_code, now=now))
+
+
+def retire_in(
+    transaction: firestore.Transaction,
+    client: firestore.Client,
+    *,
+    mgmt_no: str,
+    seq_year: int,
+    group_code: str,
+    seq_no: int,
+    retired_by: str,
+    reason: str = "DELETED",
+) -> None:
+    """결번 대장에 기록. `number_sequences.last_seq` 는 건드리지 않는다.
+
+    삭제 라우터에서 quote 문서를 `active=False`로 갱신하는 것과 같은 트랜잭션에
+    이어붙여 원자적으로 커밋한다."""
+    ref = client.collection("retired_numbers").document(mgmt_no)
+    transaction.set(
+        ref,
+        {
+            "mgmt_no": mgmt_no,
+            "seq_year": seq_year,
+            "group_code": group_code,
+            "seq_no": seq_no,
+            "retired_at": _now(),
+            "retired_by": retired_by,
+            "reason": reason,
+        },
     )
-    db.flush()
+
+
+def retire(client: firestore.Client, **kwargs) -> None:
+    """독립 트랜잭션 버전(단독 호출·테스트용)."""
+    run_transaction(client, lambda txn: retire_in(txn, client, **kwargs))

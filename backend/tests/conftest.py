@@ -2,46 +2,46 @@ from __future__ import annotations
 
 import os
 
-os.environ.setdefault("QUOTE_TESTING", "1")
+# 에뮬레이터 호스트/프로젝트 — 이미 환경에 있으면(CI 등) 그 값을 존중.
+os.environ.setdefault("FIRESTORE_EMULATOR_HOST", "127.0.0.1:8090")
+os.environ.setdefault("FIRESTORE_PROJECT_ID", "quote-pytest")
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
 
-from app.database import Base, SessionLocal, engine
-from app import models  # noqa: F401
+from app.database import get_client
 from app.main import app
 
-_TABLES = ["quote_items", "quotes", "retired_numbers", "number_sequences"]
+_COLLECTIONS = ["quotes", "number_sequences", "retired_numbers"]
+
+
+def _delete_collection(client, name: str) -> None:
+    for doc in client.collection(name).stream():
+        doc.reference.delete()
 
 
 @pytest.fixture(scope="session", autouse=True)
 def _schema():
+    """Firestore 는 스키마가 없다 — 에뮬레이터에 실제로 붙는지만 확인.
+    (PostgreSQL 시절 `Base.metadata.create_all` 대응 — 여기선 연결 확인용 read 1회.)"""
     try:
-        Base.metadata.create_all(bind=engine)
-    except OperationalError as exc:  # 테스트 DB 없음 — DB 불필요한 테스트(test_export 등)만 실행
-        pytest.skip(f"test DB unavailable: {exc}")
+        get_client().collection("quotes").limit(1).get()
+    except Exception as exc:  # 에뮬레이터 미기동 — DB 불필요한 테스트(unit/ 등)만 실행
+        pytest.skip(f"Firestore emulator unavailable: {exc}")
     yield
-    # 세션 종료 시 스키마는 남겨둔다(재실행 시 재사용).
 
 
 @pytest.fixture(autouse=True)
 def _clean():
-    with engine.begin() as conn:
-        conn.execute(
-            text(f"TRUNCATE {', '.join(_TABLES)} RESTART IDENTITY CASCADE")
-        )
+    client = get_client()
+    for name in _COLLECTIONS:
+        _delete_collection(client, name)
     yield
 
 
 @pytest.fixture()
 def db():
-    s = SessionLocal()
-    try:
-        yield s
-    finally:
-        s.close()
+    return get_client()
 
 
 @pytest.fixture()

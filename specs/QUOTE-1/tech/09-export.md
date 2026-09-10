@@ -46,13 +46,17 @@
 
 ## 개별 견적서 — PDF (`services/export_pdf.py: build_quote_pdf`)
 
-- Jinja 없이 f-string HTML 템플릿 → `weasyprint.HTML(string=...).write_pdf()`.
-- 엑셀과 **동일한 양식/섹션/문구**(공급자·수신처 2단, 인사말, 합계금액 박스, 항목 8열, 합계 블록, 조건, 서명란). APPROVED 는 공급자 블록에 직인 `<img>` 합성.
-- A4, 한글 폰트: 시스템 `Malgun Gothic`(Windows) / fallback `sans-serif`.
+- **reportlab**(Platypus: `Table`/`Paragraph`/`Image`) 로 직접 구성 — HTML/CSS 중간 표현 없음.
+  이전 구현(WeasyPrint, HTML→PDF)은 시스템 라이브러리(`libpango` 등)가 필요해 Vercel Serverless
+  같은 서버리스 환경에서 동작하지 않아 reportlab(순수 파이썬)으로 교체(DECISIONS.md 참조).
+- 엑셀과 **동일한 양식/섹션/문구**(공급자·수신처 2단, 인사말, 합계금액 박스, 항목 8열, 합계 블록, 조건, 서명란). APPROVED 는 공급자 블록 대표자명 옆에 직인 `Image` 합성.
+- A4, 한글 폰트: **`app/assets/fonts/NanumGothic-{Regular,Bold}.ttf` 를 PDF 안에 직접 임베드**
+  (`pdfmetrics.registerFont(TTFont(...))`) — 실행 환경(OS)에 한글 폰트가 설치돼 있는지와 무관하게
+  항상 동일하게 렌더링된다. 시스템 라이브러리·시스템 폰트 의존성 전부 없음.
 - 응답: `application/pdf`, `attachment; filename="<mgmt_no>.pdf"`.
-- Windows: `weasyprint` import 전에 표준 GTK3 런타임 경로(`C:\Program Files\GTK3-Runtime Win64\bin`)가
-  있으면 `PATH` 앞에 얹는다. 설치: `winget install tschoonj.GTKForWindows`.
-- WeasyPrint 미설치/GTK 이슈 환경 대비: import/렌더 실패 시 `501 {code:"PDF_UNAVAILABLE"}` 반환하고 서버는 계속 동작.
+- PDF 는 **서버가 렌더링**해서 바이트로 응답하므로, 사용자 PC/브라우저의 OS·폰트와는 무관하다.
+- reportlab import/폰트 파일 로드 실패 대비: 실패 시 `501 {code:"PDF_UNAVAILABLE"}` 반환하고 서버는 계속 동작
+  (순수 파이썬이라 정상 설치 환경에서는 거의 발생하지 않음 — 폰트 자산 파일이 삭제된 경우 등 방어용).
 
 ## 목록 — 엑셀 (`build_list_xlsx`)
 

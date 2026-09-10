@@ -1,137 +1,159 @@
-"""SQLAlchemy 모델 — TECH 03 데이터 모델과 1:1."""
+"""도메인 모델 — Firestore 문서 ↔ 파이썬 객체 변환. TECH 03(원 설계) / 12(Firestore) 참고.
+
+SQLAlchemy ORM 은 더 이상 쓰지 않는다(Firestore 전환, DECISIONS.md 참고). 여기 dataclass
+들은 순수 데이터 컨테이너이고, Firestore 저장/조회는 이 파일의 `to_dict()`/`from_doc()`
+로만 오간다 — `services/status.py`, `services/calculation.py`, `services/export_*` 는
+속성 읽기/쓰기만 하므로 ORM 이었을 때와 동일하게 무변경으로 계속 동작한다.
+"""
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import date, datetime
-
-from sqlalchemy import (
-    BigInteger,
-    Boolean,
-    CheckConstraint,
-    Date,
-    DateTime,
-    ForeignKey,
-    Index,
-    Integer,
-    SmallInteger,
-    String,
-    Text,
-    UniqueConstraint,
-    func,
-)
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from .config import GROUP_CODES
-from .database import Base
-
-_GROUP_CHECK = "group_code IN ('" + "','".join(GROUP_CODES) + "')"
+from typing import Any
 
 
-class Quote(Base):
-    __tablename__ = "quotes"
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-
-    mgmt_no: Mapped[str] = mapped_column(String(16), nullable=False, unique=True)
-    seq_year: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    group_code: Mapped[str] = mapped_column(String(1), nullable=False)
-    seq_no: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-
-    title: Mapped[str] = mapped_column(String(200), nullable=False)
-    issue_date: Mapped[date] = mapped_column(Date, nullable=False)
-    issuer_name: Mapped[str] = mapped_column(String(80), nullable=False)
-
-    customer_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    customer_contact_name: Mapped[str | None] = mapped_column(String(80))
-    customer_contact_phone: Mapped[str | None] = mapped_column(String(40))
-
-    vat_included: Mapped[bool] = mapped_column(Boolean, nullable=False)
-
-    supply_amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    vat_amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    total_with_vat: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    items_raw_total: Mapped[int] = mapped_column(BigInteger, nullable=False)
-
-    status: Mapped[str] = mapped_column(String(12), nullable=False)
-    reject_reason: Mapped[str | None] = mapped_column(Text)
-
-    purchase_locked: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="false"
-    )
-
-    created_by: Mapped[str] = mapped_column(String(40), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-
-    items: Mapped[list["QuoteItem"]] = relationship(
-        back_populates="quote",
-        cascade="all, delete-orphan",
-        order_by="QuoteItem.line_no",
-    )
-
-    __table_args__ = (
-        CheckConstraint(_GROUP_CHECK, name="ck_quotes_group_code"),
-        Index("ix_quotes_group_status", "group_code", "status"),
-        Index("ix_quotes_issue_date", "issue_date"),
-        Index("ix_quotes_seq", "seq_year", "group_code", "seq_no"),
-        Index("ix_quotes_deleted_at", "deleted_at"),
-    )
+def _parse_date(value: Any) -> date:
+    if isinstance(value, date):
+        return value
+    return date.fromisoformat(value)
 
 
-class QuoteItem(Base):
-    __tablename__ = "quote_items"
+@dataclass
+class QuoteItem:
+    line_no: int
+    name: str
+    qty: int
+    unit_price: int
+    line_amount: int
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    quote_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("quotes.id", ondelete="CASCADE"), nullable=False
-    )
-    line_no: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
-    qty: Mapped[int] = mapped_column(Integer, nullable=False)
-    unit_price: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    line_amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    def to_dict(self) -> dict:
+        return {
+            "line_no": self.line_no,
+            "name": self.name,
+            "qty": self.qty,
+            "unit_price": self.unit_price,
+            "line_amount": self.line_amount,
+        }
 
-    quote: Mapped["Quote"] = relationship(back_populates="items")
-
-    __table_args__ = (
-        CheckConstraint("qty > 0", name="ck_quote_items_qty_pos"),
-        CheckConstraint("unit_price > 0", name="ck_quote_items_price_pos"),
-        Index("ix_quote_items_quote_id", "quote_id"),
-    )
-
-
-class NumberSequence(Base):
-    """관리번호 채번용 시퀀스. (seq_year, group_code) 별 독립. TECH 05."""
-
-    __tablename__ = "number_sequences"
-
-    seq_year: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    group_code: Mapped[str] = mapped_column(String(1), primary_key=True)
-    last_seq: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="0")
+    @classmethod
+    def from_dict(cls, d: dict) -> "QuoteItem":
+        return cls(
+            line_no=d["line_no"],
+            name=d["name"],
+            qty=d["qty"],
+            unit_price=d["unit_price"],
+            line_amount=d["line_amount"],
+        )
 
 
-class RetiredNumber(Base):
-    """결번 대장 — 삭제된 관리번호. 재사용 금지 (기획서 6장)."""
+@dataclass
+class Quote:
+    """`quotes/{mgmt_no}` 문서 1건. `id` == `mgmt_no` == Firestore 문서 ID(12-firestore-migration.md § 1).
 
-    __tablename__ = "retired_numbers"
+    구조상 SQLAlchemy 시절의 `bigserial id`(정수)가 문자열로 바뀐다 — API 계약
+    breaking change(같은 문서 § 7 프론트 영향 참고).
+    """
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    mgmt_no: Mapped[str] = mapped_column(String(16), nullable=False, unique=True)
-    seq_year: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    group_code: Mapped[str] = mapped_column(String(1), nullable=False)
-    seq_no: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    retired_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    retired_by: Mapped[str] = mapped_column(String(40), nullable=False)
-    reason: Mapped[str] = mapped_column(String(20), nullable=False, server_default="DELETED")
+    id: str
+    mgmt_no: str
+    seq_year: int
+    group_code: str
+    seq_no: int
 
-    __table_args__ = (
-        UniqueConstraint("mgmt_no", name="uq_retired_numbers_mgmt_no"),
-    )
+    title: str
+    issue_date: date
+    issuer_name: str
+
+    customer_name: str
+    customer_contact_name: str | None
+    customer_contact_phone: str | None
+
+    vat_included: bool
+    supply_amount: int
+    vat_amount: int
+    total_with_vat: int
+    items_raw_total: int
+
+    status: str
+    purchase_locked: bool
+    active: bool  # soft delete 플래그. deleted_at 은 감사용 타임스탬프로만 별도 보관(§4)
+
+    created_by: str
+    created_at: datetime
+
+    items: list[QuoteItem] = field(default_factory=list)
+    reject_reason: str | None = None
+    updated_at: datetime | None = None
+    approved_at: datetime | None = None
+    rejected_at: datetime | None = None
+    cancelled_at: datetime | None = None
+    locked_at: datetime | None = None
+    deleted_at: datetime | None = None
+
+    def to_dict(self) -> dict:
+        """Firestore 문서 본문. `mgmt_no`는 문서ID와 같은 값을 필드로도 중복 저장
+        (쿼리·export 편의 — 정본은 문서ID)."""
+        return {
+            "mgmt_no": self.mgmt_no,
+            "seq_year": self.seq_year,
+            "group_code": self.group_code,
+            "seq_no": self.seq_no,
+            "title": self.title,
+            "issue_date": self.issue_date.isoformat(),
+            "issuer_name": self.issuer_name,
+            "customer_name": self.customer_name,
+            "customer_contact_name": self.customer_contact_name,
+            "customer_contact_phone": self.customer_contact_phone,
+            "vat_included": self.vat_included,
+            "supply_amount": self.supply_amount,
+            "vat_amount": self.vat_amount,
+            "total_with_vat": self.total_with_vat,
+            "items_raw_total": self.items_raw_total,
+            "items": [i.to_dict() for i in self.items],
+            "status": self.status,
+            "reject_reason": self.reject_reason,
+            "purchase_locked": self.purchase_locked,
+            "active": self.active,
+            "created_by": self.created_by,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "approved_at": self.approved_at,
+            "rejected_at": self.rejected_at,
+            "cancelled_at": self.cancelled_at,
+            "locked_at": self.locked_at,
+            "deleted_at": self.deleted_at,
+        }
+
+    @classmethod
+    def from_doc(cls, doc_id: str, data: dict) -> "Quote":
+        return cls(
+            id=doc_id,
+            mgmt_no=data["mgmt_no"],
+            seq_year=data["seq_year"],
+            group_code=data["group_code"],
+            seq_no=data["seq_no"],
+            title=data["title"],
+            issue_date=_parse_date(data["issue_date"]),
+            issuer_name=data["issuer_name"],
+            customer_name=data["customer_name"],
+            customer_contact_name=data.get("customer_contact_name"),
+            customer_contact_phone=data.get("customer_contact_phone"),
+            vat_included=data["vat_included"],
+            supply_amount=data["supply_amount"],
+            vat_amount=data["vat_amount"],
+            total_with_vat=data["total_with_vat"],
+            items_raw_total=data["items_raw_total"],
+            items=[QuoteItem.from_dict(i) for i in data.get("items", [])],
+            status=data["status"],
+            reject_reason=data.get("reject_reason"),
+            purchase_locked=data.get("purchase_locked", False),
+            active=data.get("active", True),
+            created_by=data["created_by"],
+            created_at=data["created_at"],
+            updated_at=data.get("updated_at"),
+            approved_at=data.get("approved_at"),
+            rejected_at=data.get("rejected_at"),
+            cancelled_at=data.get("cancelled_at"),
+            locked_at=data.get("locked_at"),
+            deleted_at=data.get("deleted_at"),
+        )

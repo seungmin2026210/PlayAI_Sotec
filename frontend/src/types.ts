@@ -31,7 +31,7 @@ export interface QuoteItem {
 }
 
 export interface Quote {
-  id: number;
+  id: string; // Firestore 문서ID == mgmt_no
   mgmt_no: string;
   seq_year: number;
   group_code: string;
@@ -65,7 +65,7 @@ export interface Quote {
 }
 
 export interface QuoteListItem {
-  id: number;
+  id: string; // Firestore 문서ID == mgmt_no
   mgmt_no: string;
   group_code: string;
   group_name: string;

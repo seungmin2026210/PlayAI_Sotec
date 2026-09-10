@@ -37,7 +37,7 @@ export function QuoteForm({ mode }: { mode: "create" | "edit" }) {
   useEffect(() => {
     if (mode !== "edit" || !id) return;
     let alive = true;
-    getQuote(Number(id))
+    getQuote(id)
       .then((q) => {
         if (!alive) return;
         if (q.read_only) {
@@ -112,7 +112,7 @@ export function QuoteForm({ mode }: { mode: "create" | "edit" }) {
       const q =
         mode === "create"
           ? await createQuote(payload)
-          : await updateQuote(Number(id), payload);
+          : await updateQuote(id!, payload);
       toast.show(
         mode === "create"
           ? `등록 완료 · 관리번호 ${q.mgmt_no}`
