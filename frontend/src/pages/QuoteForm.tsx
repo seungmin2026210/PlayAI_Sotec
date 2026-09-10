@@ -130,12 +130,14 @@ export function QuoteForm({ mode }: { mode: "create" | "edit" }) {
   if (loading) return <div className="page">불러오는 중…</div>;
 
   return (
-    <div className="page">
+    <div className="page page-full">
       <div className="page-head">
         <h1>{mode === "create" ? "견적서 신규 등록" : "견적서 수정"}</h1>
-        <button className="ghost" onClick={() => navigate(-1)}>
-          취소
-        </button>
+        {mode === "edit" && (
+          <button className="ghost" onClick={() => navigate(-1)}>
+            취소
+          </button>
+        )}
       </div>
 
       <form onSubmit={submit}>
@@ -216,25 +218,31 @@ export function QuoteForm({ mode }: { mode: "create" | "edit" }) {
           <ItemsEditor items={form.items} onChange={(items: ItemInput[]) => set("items", items)} />
 
           <div className="vat-row">
-            <label className="inline">
+            <label className="inline vat-option">
               <input
                 type="radio"
                 checked={form.vat_included}
                 onChange={() => set("vat_included", true)}
               />
-              부가세 포함 (고객에게 부가세 포함가 함께 명시)
+              <span className="vat-option-text">
+                <span>부가세 포함</span>
+                <span className="vat-option-sub">(고객에게 부가세 포함가 함께 명시)</span>
+              </span>
             </label>
-            <label className="inline">
+            <label className="inline vat-option">
               <input
                 type="radio"
                 checked={!form.vat_included}
                 onChange={() => set("vat_included", false)}
               />
-              부가세 미포함 (공급가액 기준, 부가세 별도)
+              <span className="vat-option-text">
+                <span>부가세 미포함</span>
+                <span className="vat-option-sub">(공급가액 기준, 부가세 별도)</span>
+              </span>
             </label>
           </div>
 
-          <table className="preview">
+          <table className="preview preview-wide">
             <tbody>
               <tr>
                 <th>항목 합계</th>
@@ -258,7 +266,7 @@ export function QuoteForm({ mode }: { mode: "create" | "edit" }) {
 
         {error && <div className="form-error">{error}</div>}
 
-        <div className="row-gap">
+        <div className="row-gap" style={{ marginTop: 15, justifyContent: "flex-end" }}>
           <button type="submit" className="primary" disabled={busy}>
             {busy ? "저장 중…" : mode === "create" ? "등록 (상태: 제출됨)" : "수정 저장"}
           </button>
