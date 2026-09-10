@@ -88,8 +88,11 @@ body {{ font-size: 10.5px; color: #1a1a1a; }}
 h1 {{ text-align: center; letter-spacing: 10px; margin: 4px 0 14px; font-size: 24px; }}
 .head {{ display: flex; gap: 12px; align-items: stretch; }}
 .head > div {{ flex: 1; }}
-/* 좌(견적일자·수신처) 열을 우(공급자) 열 높이에 맞춰 위·아래로 벌려 균형을 맞춘다 */
-.head .basic {{ display: flex; flex-direction: column; justify-content: space-between; }}
+/* 좌 열: 견적일자·수신처를 붙여 두고, 남는 높이는 표 행을 늘려 채운다(중간 공백 없이 우 공급자 열과 상·하단 정렬) */
+.head .basic {{ display: flex; flex-direction: column; }}
+.head .basic > table, .head .basic > .receiver {{ flex: 1 1 auto; }}
+.head .basic > .receiver {{ display: flex; flex-direction: column; }}
+.head .basic > .receiver > table {{ flex: 1 1 auto; }}
 table {{ border-collapse: collapse; width: 100%; }}
 .kv th {{ width: 84px; text-align: left; background: #f4f4f4; border: 1px solid #ccc; padding: 3px 6px; font-weight: bold; }}
 .kv td {{ border: 1px solid #ccc; padding: 3px 6px; }}
