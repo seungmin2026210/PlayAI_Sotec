@@ -79,10 +79,11 @@ label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--
 
 .list-table { width: 100%; border-collapse: collapse; }
 .list-table th, .list-table td {
-  text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border);
+  text-align: center; padding: 9px 10px; border-bottom: 1px solid var(--border);
 }
 .list-table thead th { background: #fafbfc; font-size: 16px; color: var(--muted); }
 .list-table td.num, .list-table th.num { text-align: right; }
+.list-table th.center { text-align: center; }
 .list-table tr.clickable { cursor: pointer; }
 .list-table tr.clickable:hover td { background: #f7f9fc; }
 .empty { text-align: center; color: var(--muted); padding: 24px; }
@@ -124,7 +125,7 @@ label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--
   font-weight: 700; color: var(--text); border-top: 2px solid var(--text);
 }
 .quote-items tfoot tr.foot-note td {
-  padding-top: 8px; border: none; color: var(--muted); font-size: 12px; text-align: right;
+  padding-top: 8px; border: none; color: var(--muted); font-size: 15px; text-align: right;
 }
 
 .badge {
