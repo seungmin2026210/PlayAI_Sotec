@@ -111,7 +111,7 @@ export function QuoteDetail() {
       <div className="page-head">
         <div>
           <h1>
-            {quote.mgmt_no} <StatusBadge status={quote.status} />{" "}
+            {quote.title} ({quote.mgmt_no}) <StatusBadge status={quote.status} />{" "}
             {quote.purchase_locked && <LockBadge />}
           </h1>
           <p className="muted">
