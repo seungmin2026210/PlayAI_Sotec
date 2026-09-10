@@ -86,8 +86,10 @@ def _build_html(q: Quote) -> str:
 body {{ font-size: 10.5px; color: #1a1a1a; }}
 .doc-logo {{ height: 26px; }}
 h1 {{ text-align: center; letter-spacing: 10px; margin: 4px 0 14px; font-size: 24px; }}
-.head {{ display: flex; gap: 12px; }}
+.head {{ display: flex; gap: 12px; align-items: stretch; }}
 .head > div {{ flex: 1; }}
+/* 좌(견적일자·수신처) 열을 우(공급자) 열 높이에 맞춰 위·아래로 벌려 균형을 맞춘다 */
+.head .basic {{ display: flex; flex-direction: column; justify-content: space-between; }}
 table {{ border-collapse: collapse; width: 100%; }}
 .kv th {{ width: 84px; text-align: left; background: #f4f4f4; border: 1px solid #ccc; padding: 3px 6px; font-weight: bold; }}
 .kv td {{ border: 1px solid #ccc; padding: 3px 6px; }}
@@ -115,18 +117,20 @@ table {{ border-collapse: collapse; width: 100%; }}
 <h1>견 적 서</h1>
 
 <div class="head">
-  <div>
+  <div class="basic">
     <table class="kv">
       <tr><th>견적일자</th><td>{_esc(q.issue_date.isoformat())}</td></tr>
       <tr><th>견적유효기간</th><td>{_esc(QUOTE_VALIDITY_NOTE)}</td></tr>
       <tr><th>견적 NO</th><td>{_esc(format_mgmt_no_display(q.seq_year, q.group_code, q.seq_no))}</td></tr>
     </table>
-    <div class="block-title">[ 수신처 (고객사) ]</div>
-    <table class="kv">
-      <tr><th>고객사명</th><td>{_esc(q.customer_name)}</td></tr>
-      <tr><th>담당자</th><td>{_esc(q.customer_contact_name or "-")} {_esc(q.customer_contact_phone or "")}</td></tr>
-      <tr><th>C.C</th><td></td></tr>
-    </table>
+    <div class="receiver">
+      <div class="block-title">[ 수신처 (고객사) ]</div>
+      <table class="kv">
+        <tr><th>고객사명</th><td>{_esc(q.customer_name)}</td></tr>
+        <tr><th>담당자</th><td>{_esc(q.customer_contact_name or "-")} {_esc(q.customer_contact_phone or "")}</td></tr>
+        <tr><th>C.C</th><td></td></tr>
+      </table>
+    </div>
   </div>
   <div class="supplier">
     {seal_img}
