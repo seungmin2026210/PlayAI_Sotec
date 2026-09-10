@@ -72,7 +72,7 @@ export function QuoteList() {
   const curPage = applied.page ?? 1;
 
   return (
-    <div className="page">
+    <div className="page page-full">
       <div className="page-head">
         <div>
           <h1>견적서 목록</h1>
@@ -83,7 +83,7 @@ export function QuoteList() {
           </p>
         </div>
         <div className="row-gap">
-          <button onClick={exportList}>목록 엑셀</button>
+          <button onClick={exportList}>목록 엑셀 다운로드 </button>
           <SuperAdminOnly>
             <button className="primary" onClick={() => navigate("/quotes/new")}>
               + 신규 등록

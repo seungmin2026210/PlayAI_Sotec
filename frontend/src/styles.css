@@ -17,7 +17,7 @@ body {
   font-family: "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
-  font-size: 14px;
+  font-size: 15px;
 }
 a { color: var(--primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -47,15 +47,17 @@ input, select {
   background: #fff;
   width: 100%;
 }
-label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 15px; color: var(--muted); }
 label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--text); }
 
 /* 기존 상단바(Shell)는 design/AppShell.tsx 의 사이드바 레이아웃으로 대체됨 —
    app-bar/brand/who/role-tag 클래스와 전역 main{} 규칙은 여기서 제거. */
 .page { display: flex; flex-direction: column; gap: 16px; max-width: 1120px; margin: 0 auto; }
+/* 구매관리/계약관리(Placeholder) 처럼 사이드바 옆 콘텐츠 영역을 꽉 채우는 화면용. */
+.page-full { max-width: none; margin: 0; }
 .page-head { display: flex; justify-content: space-between; align-items: flex-start; }
-.page-head h1 { margin: 0 0 2px; font-size: 20px; }
-.muted { color: var(--muted); font-size: 13px; margin: 2px 0; }
+.page-head h1 { margin: 0 0 2px; font-size: 25px; }
+.muted { color: var(--muted); font-size: 15px; margin: 2px 0; }
 .row-gap { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .card {
@@ -64,7 +66,7 @@ label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--
   border-radius: 10px;
   padding: 16px;
 }
-.card h2 { margin: 0 0 12px; font-size: 15px; }
+.card h2 { margin: 0 0 12px; font-size: 20px; }
 
 .filter-bar {
   display: grid;
@@ -79,7 +81,7 @@ label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--
 .list-table th, .list-table td {
   text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border);
 }
-.list-table thead th { background: #fafbfc; font-size: 12px; color: var(--muted); }
+.list-table thead th { background: #fafbfc; font-size: 16px; color: var(--muted); }
 .list-table td.num, .list-table th.num { text-align: right; }
 .list-table tr.clickable { cursor: pointer; }
 .list-table tr.clickable:hover td { background: #f7f9fc; }
@@ -89,13 +91,17 @@ label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--
 
 .items-editor { width: 100%; border-collapse: collapse; }
 .items-editor th, .items-editor td { padding: 6px; border-bottom: 1px solid var(--border); }
-.items-editor th { font-size: 12px; color: var(--muted); text-align: left; }
+.items-editor th { font-size: 15px; color: var(--muted); text-align: left; }
 .items-editor td.num { text-align: right; white-space: nowrap; }
 .items-editor tfoot td { border: none; padding-top: 10px; }
 
 .vat-row { display: flex; gap: 24px; margin: 14px 0; flex-wrap: wrap; }
+.vat-option { align-items: center; flex: 0 0 auto; }
+.vat-option-text { display: flex; flex-direction: column; line-height: 1.4; white-space: nowrap; }
+.vat-option-sub { font-size: 12px; color: var(--muted); }
 
 .preview { border-collapse: collapse; margin-top: 12px; min-width: 340px; }
+.preview-wide { width: 100%; margin-top: 20px; }
 .preview th { text-align: left; padding: 6px 12px; color: var(--muted); font-weight: 500; }
 .preview td { text-align: right; padding: 6px 12px; font-variant-numeric: tabular-nums; }
 .preview tr.total th, .preview tr.total td {
