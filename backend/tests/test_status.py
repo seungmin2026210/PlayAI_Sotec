@@ -43,12 +43,43 @@ def test_approved_cannot_be_rejected(client, admin_headers):
     assert r.json()["detail"]["code"] == "INVALID_TRANSITION"
 
 
-def test_approved_can_be_cancelled(client, admin_headers):
+def test_approved_cannot_be_cancelled(client, admin_headers):
     q = _create(client, admin_headers)
     client.post(f"/api/quotes/{q['id']}/approve", headers=admin_headers)
     r = client.post(f"/api/quotes/{q['id']}/cancel", headers=admin_headers)
+    assert r.status_code == 409
+    assert r.json()["detail"]["code"] == "INVALID_TRANSITION"
+
+
+def test_approved_is_read_only(client, admin_headers):
+    q = _create(client, admin_headers)
+    r = client.post(f"/api/quotes/{q['id']}/approve", headers=admin_headers)
+    assert r.json()["read_only"] is True
+
+    # 승인됨은 읽기전용 보존 → 수정/삭제 불가
+    r2 = client.put(f"/api/quotes/{q['id']}", json=sample_payload(title="바뀜"), headers=admin_headers)
+    assert r2.status_code == 409
+    assert r2.json()["detail"]["code"] == "INVALID_TRANSITION"
+
+    r3 = client.delete(f"/api/quotes/{q['id']}", headers=admin_headers)
+    assert r3.status_code == 409
+    assert r3.json()["detail"]["code"] == "INVALID_TRANSITION"
+
+
+def test_export_requires_approved(client, admin_headers):
+    q = _create(client, admin_headers)
+
+    for call in (
+        lambda: client.get(f"/api/quotes/{q['id']}/export.xlsx", headers=admin_headers),
+        lambda: client.get(f"/api/quotes/{q['id']}/export.pdf", headers=admin_headers),
+    ):
+        resp = call()
+        assert resp.status_code == 409
+        assert resp.json()["detail"]["code"] == "EXPORT_NOT_APPROVED"
+
+    client.post(f"/api/quotes/{q['id']}/approve", headers=admin_headers)
+    r = client.get(f"/api/quotes/{q['id']}/export.xlsx", headers=admin_headers)
     assert r.status_code == 200
-    assert r.json()["status"] == "CANCELLED"
 
 
 def test_purchase_lock_blocks_mutation(client, admin_headers):
