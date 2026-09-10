@@ -83,7 +83,7 @@ export function QuoteList() {
           </p>
         </div>
         <div className="row-gap">
-          <button onClick={exportList}>목록 엑셀</button>
+          <button onClick={exportList}>목록 엑셀 다운로드 </button>
           <SuperAdminOnly>
             <button className="primary" onClick={() => navigate("/quotes/new")}>
               + 신규 등록
@@ -172,15 +172,15 @@ export function QuoteList() {
         <table className="list-table">
           <thead>
             <tr>
-              <th>관리번호</th>
-              <th>그룹</th>
-              <th>견적서명</th>
-              <th>수신처</th>
-              <th>발행일자</th>
+              <th className="center">관리번호</th>
+              <th className="center">그룹</th>
+              <th className="center">견적서명</th>
+              <th className="center">수신처</th>
+              <th className="center">발행일자</th>
               <th className="num">공급가액</th>
-              <th>부가세</th>
-              <th>상태</th>
-              <th>등록시간</th>
+              <th className="num">부가세</th>
+              <th className="center">상태</th>
+              <th className="center">등록시간</th>
             </tr>
           </thead>
           <tbody>
@@ -218,7 +218,15 @@ export function QuoteList() {
                     <StatusBadge status={q.status} />
                     {q.purchase_locked && <span className="badge badge-lock">잠금</span>}
                   </td>
-                  <td>{new Date(q.created_at).toLocaleString("ko-KR")}</td>
+                  <td>
+                    {new Date(q.created_at).toLocaleString("ko-KR", {
+                      year: "numeric",
+                      month: "2-digit",
+                      day: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </td>
                 </tr>
               ))}
           </tbody>
