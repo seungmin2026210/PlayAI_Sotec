@@ -35,10 +35,13 @@
 | SUBMITTED→reject (사유 O) | REJECTED, `reject_reason` 저장 |
 | SUBMITTED→reject (사유 X) | 422 |
 | APPROVED→reject | 409 INVALID_TRANSITION |
-| APPROVED→cancel | CANCELLED |
+| APPROVED→cancel | 409 INVALID_TRANSITION |
+| APPROVED 수정/삭제 | 409 INVALID_TRANSITION (읽기전용 보존) |
 | REJECTED→approve | 409 |
 | 잠금 후 수정/취소/삭제 | 409 PURCHASE_LOCKED |
 | REJECTED 수정 | 409 (읽기전용 보존) |
+| SUBMITTED 상태 개별 엑셀/PDF export | 409 EXPORT_NOT_APPROVED |
+| APPROVED 개별 엑셀 export | 200 |
 
 ## 권한 (`tests/test_permissions.py`)
 
@@ -47,12 +50,12 @@
 | 그룹관리자 `POST /quotes` | 403 FORBIDDEN_ROLE |
 | 그룹관리자 목록 | 본인 그룹만 반환 |
 | 그룹관리자 타 그룹 상세 | 404 |
-| 그룹관리자 export(본인 그룹) | 200 |
+| 그룹관리자 export(본인 그룹, 승인됨) | 200 |
 | 미인증 요청 | 401 |
 
 ## 통합 흐름 (`tests/test_flow.py`)
 
-로그인(Admin) → 등록 → 목록 노출 → 상세 → 수정 → 승인 → 목록 엑셀 200 → 개별 엑셀 200 → 발송 200(안내 메시지) → 삭제 → 목록에서 사라짐 + 결번 확인.
+로그인(Admin) → 등록 → 목록 노출 → 상세 → 수정 → 삭제 → 목록에서 사라짐 + 결번 확인 → 재등록(결번 확인) → 승인 → 목록 엑셀 200 → 개별 엑셀 200 → 발송 200(안내 메시지) → 승인됨 수정/취소/삭제 409 확인.
 
 ## 수동 확인 (프론트)
 

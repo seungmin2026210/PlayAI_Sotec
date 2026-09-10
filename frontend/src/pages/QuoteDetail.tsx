@@ -102,9 +102,9 @@ export function QuoteDetail() {
   if (!quote) return <div className="page">견적서를 찾을 수 없습니다.</div>;
 
   const canApproveReject = quote.status === "SUBMITTED" && !quote.purchase_locked;
-  const canCancel =
-    (quote.status === "SUBMITTED" || quote.status === "APPROVED") && !quote.purchase_locked;
+  const canCancel = quote.status === "SUBMITTED" && !quote.purchase_locked;
   const canEditDelete = !quote.read_only;
+  const isApproved = quote.status === "APPROVED";
 
   return (
     <div className="page page-full">
@@ -121,16 +121,19 @@ export function QuoteDetail() {
           </p>
         </div>
         <div className="head-actions">
-          <button onClick={() => dl(() => downloadQuoteXlsx(quoteId))}>엑셀</button>
-          <button onClick={() => dl(() => downloadQuotePdf(quoteId))}>PDF</button>
+          {isApproved && (
+            <>
+              <button onClick={() => dl(() => downloadQuoteXlsx(quoteId))}>엑셀</button>
+              <button onClick={() => dl(() => downloadQuotePdf(quoteId))}>PDF</button>
+            </>
+          )}
           <SuperAdminOnly>
-            <button onClick={onSend}>개인메일 발송</button>
-            <button
-              disabled={!canEditDelete || busy}
-              onClick={() => navigate(`/quotes/${quoteId}/edit`)}
-            >
-              수정
-            </button>
+            {isApproved && <button onClick={onSend}>개인메일 발송</button>}
+            {canEditDelete && (
+              <button disabled={busy} onClick={() => navigate(`/quotes/${quoteId}/edit`)}>
+                수정
+              </button>
+            )}
           </SuperAdminOnly>
           <button className="ghost" onClick={() => navigate("/quotes")}>
             목록으로
@@ -245,34 +248,44 @@ export function QuoteDetail() {
 
       <SuperAdminOnly>
         <div className="detail-actions">
-          <button
-            className="primary"
-            disabled={!canApproveReject || busy}
-            onClick={() => run(() => approveQuote(quoteId), "승인했습니다.")}
-          >
-            승인
-          </button>
-          <button className="warn" disabled={!canApproveReject || busy} onClick={onReject}>
-            반려
-          </button>
-          <button
-            disabled={!canCancel || busy}
-            onClick={() => run(() => cancelQuote(quoteId), "취소 처리했습니다.")}
-          >
-            취소
-          </button>
-          <button
-            disabled={quote.purchase_locked || busy}
-            title="구매관리 데이터 반영(자리표시) — 반영 시 읽기전용 잠금"
-            onClick={() =>
-              run(() => purchaseLockQuote(quoteId), "구매관리 반영으로 잠금되었습니다.")
-            }
-          >
-            구매관리 반영(잠금)
-          </button>
-          <button className="danger" disabled={!canEditDelete || busy} onClick={onDelete}>
-            삭제
-          </button>
+          {canApproveReject && (
+            <button
+              className="primary"
+              disabled={busy}
+              onClick={() => run(() => approveQuote(quoteId), "승인했습니다.")}
+            >
+              승인
+            </button>
+          )}
+          {canApproveReject && (
+            <button className="warn" disabled={busy} onClick={onReject}>
+              반려
+            </button>
+          )}
+          {canCancel && (
+            <button
+              disabled={busy}
+              onClick={() => run(() => cancelQuote(quoteId), "취소 처리했습니다.")}
+            >
+              취소
+            </button>
+          )}
+          {isApproved && (
+            <button
+              disabled={quote.purchase_locked || busy}
+              title="구매관리 데이터 반영(자리표시) — 반영 시 읽기전용 잠금"
+              onClick={() =>
+                run(() => purchaseLockQuote(quoteId), "구매관리 반영으로 잠금되었습니다.")
+              }
+            >
+              구매관리 반영(잠금)
+            </button>
+          )}
+          {canEditDelete && (
+            <button className="danger" disabled={busy} onClick={onDelete}>
+              삭제
+            </button>
+          )}
         </div>
       </SuperAdminOnly>
     </div>

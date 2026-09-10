@@ -110,7 +110,7 @@ pytest                            # 30 tests.
 - 금액은 **정수(원)** 로만 다룬다. 부동소수 금지. 절사는 총합계 기준 내림.
 - 채번 연도는 발행일자가 아니라 **등록 시각 서버 연도**.
 - 삭제는 물리 삭제가 아니라 soft delete(`active=False` + `deleted_at` 기록) + `retired_numbers` 기록. `number_sequences.last_seq` 는 되돌리지 않는다(결번 유지). `active`는 Firestore 목록 쿼리용, 존재/읽기전용 판정은 여전히 `deleted_at`(`services/status.py`, 무변경) 기준.
-- 상태 `REJECTED`/`CANCELLED` 및 `purchase_locked` 는 읽기전용 — 수정/삭제/취소 불가.
+- 상태 `APPROVED`/`REJECTED`/`CANCELLED`(`services/status.py: TERMINAL_STATUSES`) 및 `purchase_locked` 는 읽기전용 — 수정/삭제/취소 불가. 승인은 되돌릴 수 없다(승인됨 → 취소 불가).
 - 에러 응답은 항상 `{"detail": {"code": "...", "message": "..."}}`. 새 에러는 `errors.py` 코드 상수 + `tech/04-api-endpoints.md` 표에 추가.
 - 커밋: 스펙 변경 + 코드 + 테스트를 하나의 일관된 PR 로.
 

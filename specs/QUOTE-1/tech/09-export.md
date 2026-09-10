@@ -1,5 +1,10 @@
 # 09. Export 구현
 
+개별 견적서(엑셀·PDF)는 `status == APPROVED` 인 견적서만 내보낼 수 있다 —
+승인 전(`SUBMITTED`)/반려됨/취소됨 상태로 요청하면 `409 EXPORT_NOT_APPROVED`
+(`routers/quotes.py: export_quote_xlsx/export_quote_pdf` → `services/status.py: guard_exportable`).
+목록 엑셀(`/quotes/export.xlsx`)은 이 제약과 무관하게 모든 상태를 포함한다.
+
 개별 견적서(엑셀·PDF)는 **실제 견적서.jpg 양식**을 따른다. 양식/문구 상수는
 `config.py` 한 곳(`COMPANY`, `MGMT_NO_DISPLAY_PREFIX`, `QUOTE_VALIDITY_NOTE`,
 `QUOTE_AUTHOR_TEAM/ROLE`, `QUOTE_GREETING(_LINES)`, `QUOTE_CONDITIONS`,

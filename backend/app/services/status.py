@@ -10,6 +10,7 @@ from ..config import (
     STATUS_SUBMITTED,
 )
 from ..errors import (
+    EXPORT_NOT_APPROVED,
     INVALID_TRANSITION,
     NOT_FOUND,
     PURCHASE_LOCKED,
@@ -17,14 +18,13 @@ from ..errors import (
 )
 from ..models import Quote
 
-TERMINAL_STATUSES = frozenset({STATUS_REJECTED, STATUS_CANCELLED})
+TERMINAL_STATUSES = frozenset({STATUS_APPROVED, STATUS_REJECTED, STATUS_CANCELLED})
 
 # (from_status, action) -> to_status
 ALLOWED: dict[tuple[str, str], str] = {
     (STATUS_SUBMITTED, "approve"): STATUS_APPROVED,
     (STATUS_SUBMITTED, "reject"): STATUS_REJECTED,
     (STATUS_SUBMITTED, "cancel"): STATUS_CANCELLED,
-    (STATUS_APPROVED, "cancel"): STATUS_CANCELLED,
 }
 
 
@@ -54,6 +54,16 @@ def guard_mutable(quote: Quote) -> None:
             INVALID_TRANSITION,
             409,
             f"'{quote.status}' 상태의 견적서는 읽기전용으로 보존됩니다.",
+        )
+
+
+def guard_exportable(quote: Quote) -> None:
+    """개별 엑셀/PDF export 선행 검사. 승인된(APPROVED) 견적서만 정식 문서로 내보낼 수 있다."""
+    if quote.status != STATUS_APPROVED:
+        raise AppError(
+            EXPORT_NOT_APPROVED,
+            409,
+            "승인된 견적서만 엑셀/PDF로 내보낼 수 있습니다.",
         )
 
 

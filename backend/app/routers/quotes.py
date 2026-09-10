@@ -28,6 +28,7 @@ from ..services.status import (
     apply_purchase_lock,
     apply_transition,
     assert_exists,
+    guard_exportable,
     guard_mutable,
 )
 
@@ -294,6 +295,7 @@ def export_quote_xlsx(
     user: CurrentUser = Depends(get_current_user),
 ) -> Response:
     quote = _load_or_404(client, quote_id, user)
+    guard_exportable(quote)
     data = build_quote_xlsx(quote)
     return Response(
         content=data,
@@ -309,6 +311,7 @@ def export_quote_pdf(
     user: CurrentUser = Depends(get_current_user),
 ) -> Response:
     quote = _load_or_404(client, quote_id, user)
+    guard_exportable(quote)
     data = build_quote_pdf(quote)  # 실패 시 AppError(PDF_UNAVAILABLE, 501)
     return Response(
         content=data,

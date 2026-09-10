@@ -23,6 +23,8 @@
 | 동시성 | `number_sequences` 행 `SELECT FOR UPDATE` + `quotes.mgmt_no UNIQUE` | 기획서 6장 "동시성 제어 필요" 반영 |
 | 토큰 권한 | 토큰엔 username만, role/group은 매 요청 `ACCOUNTS` 재조회 | 상수 변경 즉시 반영, 권한 박제 방지 |
 | 수정 시 상태 | 유지(되돌리지 않음) | open-10 미정 → 가장 단순한 기본값, 정책 함수로 격리 |
+| 승인됨 읽기전용 전환 | `APPROVED` 도 `REJECTED`/`CANCELLED` 와 동일하게 `TERMINAL_STATUSES` 로 취급 — 승인 즉시 수정/취소/삭제 불가(구매관리 반영 여부 무관) | 승인 후 내용이 바뀌면 승인의 의미가 없음. 되돌릴 필요가 생기면 반려/재제출 경로로 유도 |
+| 개별 export 승인 제약 | 개별 엑셀/PDF export(`/quotes/{id}/export.xlsx`\|`.pdf`)는 `status == APPROVED` 인 견적서만 허용, 아니면 `409 EXPORT_NOT_APPROVED`(`services/status.py: guard_exportable`). 프론트도 승인됨일 때만 엑셀/PDF/개인메일 발송 버튼 노출. 목록 엑셀(`/quotes/export.xlsx`)은 제약 없음 | 승인 전 견적서가 정식 문서(직인 포함 양식)로 외부에 유출되는 것을 방지 — 서버가 최종 방어선 |
 | 감사로그 | 미구현, 단 상태전이 시각 컬럼은 확보 | open-5 미정, 향후 도입 비용 최소화 |
 | PDF 실패 환경 | `501 PDF_UNAVAILABLE` 반환, 서버 계속 동작 | WeasyPrint(GTK) 설치 이슈 흔함, 데모 중단 방지 |
 | 금액 표기 | `1,234,567원` (콤마+원, 통화기호 X) | open-6 미정 → 국내 관행 기본값, 포매터 1곳 격리 |

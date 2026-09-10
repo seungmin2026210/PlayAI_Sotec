@@ -34,18 +34,6 @@ def test_full_flow(client, admin_headers):
     assert r.json()["supply_amount"] == 12_300_000  # 십만단위 절사
     assert r.json()["updated_at"] is not None
 
-    # 승인
-    assert client.post(f"/api/quotes/{qid}/approve", headers=admin_headers).status_code == 200
-
-    # export
-    assert client.get("/api/quotes/export.xlsx", headers=admin_headers).status_code == 200
-    assert client.get(f"/api/quotes/{qid}/export.xlsx", headers=admin_headers).status_code == 200
-
-    # 발송 (자리표시)
-    r = client.post(f"/api/quotes/{qid}/send", headers=admin_headers)
-    assert r.status_code == 200
-    assert r.json()["message"] == "이메일 발송 기능은 준비 중입니다."
-
     # 삭제 → 목록에서 사라짐 + 결번
     assert client.delete(f"/api/quotes/{qid}", headers=admin_headers).status_code == 200
     assert client.get(f"/api/quotes/{qid}", headers=admin_headers).status_code == 404
@@ -54,6 +42,24 @@ def test_full_flow(client, admin_headers):
     # 다음 등록은 002 (001 결번)
     r = client.post("/api/quotes", json=sample_payload(), headers=admin_headers)
     assert r.json()["mgmt_no"] == "26-A-002"
+    qid2 = r.json()["id"]
+
+    # 승인
+    assert client.post(f"/api/quotes/{qid2}/approve", headers=admin_headers).status_code == 200
+
+    # export
+    assert client.get("/api/quotes/export.xlsx", headers=admin_headers).status_code == 200
+    assert client.get(f"/api/quotes/{qid2}/export.xlsx", headers=admin_headers).status_code == 200
+
+    # 발송 (자리표시)
+    r = client.post(f"/api/quotes/{qid2}/send", headers=admin_headers)
+    assert r.status_code == 200
+    assert r.json()["message"] == "이메일 발송 기능은 준비 중입니다."
+
+    # 승인됨은 읽기전용 보존 → 수정/취소/삭제 불가
+    assert client.put(f"/api/quotes/{qid2}", json=sample_payload(), headers=admin_headers).status_code == 409
+    assert client.post(f"/api/quotes/{qid2}/cancel", headers=admin_headers).status_code == 409
+    assert client.delete(f"/api/quotes/{qid2}", headers=admin_headers).status_code == 409
 
 
 def test_validation_rejects_zero_price(client, admin_headers):

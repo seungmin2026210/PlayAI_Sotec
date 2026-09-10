@@ -35,6 +35,7 @@ def test_group_manager_other_group_detail_is_404(client, admin_headers, manager_
 
 def test_group_manager_can_export_own_group(client, admin_headers, manager_headers):
     a = _create(client, admin_headers, group_code="A")
+    client.post(f"/api/quotes/{a['id']}/approve", headers=admin_headers)  # export는 승인됨만 허용
     r = client.get(f"/api/quotes/{a['id']}/export.xlsx", headers=manager_headers)
     assert r.status_code == 200
     assert "spreadsheet" in r.headers["content-type"]
