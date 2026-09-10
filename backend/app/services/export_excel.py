@@ -99,7 +99,7 @@ def build_quote_xlsx(q: Quote) -> bytes:
     ws = wb.active
     ws.title = "견적서"
     ws.sheet_view.showGridLines = False
-    widths = [5, 16, 12, 12, 8, 13, 14, 13, 12]  # A..I
+    widths = [15, 16, 12, 12, 8, 13, 14, 13, 12]  # A..I
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
@@ -166,10 +166,14 @@ def build_quote_xlsx(q: Quote) -> bytes:
     r += 1
 
     # ---- 합계금액 요약 --------------------------------------------------
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
     _put(ws, f"A{r}", "합계금액 (공급가액 + 세액)", font=_BOLD, box=True, fill=True)
-    ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=4)
-    tc = _put(ws, f"B{r}", q.total_with_vat, font=Font(bold=True, size=13), align=_RIGHT, box=True)
+    ws[f"B{r}"].border = _BOX
+    ws[f"B{r}"].fill = _HEAD_FILL
+    ws.merge_cells(start_row=r, start_column=3, end_row=r, end_column=4)
+    tc = _put(ws, f"C{r}", q.total_with_vat, font=Font(bold=True, size=13), align=_RIGHT, box=True)
     tc.number_format = _WON
+    ws[f"D{r}"].border = _BOX
     r += 2
 
     # ---- 용역(계약) ---------------------------------------------------
