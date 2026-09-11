@@ -12,9 +12,9 @@
 | open-6 | 금액 화면 표기 규칙 | 05 | `1,234,567원` 천단위 콤마. 포매터 1곳 격리 |
 | open-7 | 목록화면 검색/필터 최종 항목 | 08 (8.1) | 잠정 제안(관리번호/견적서명/그룹/상태/발행일자범위/담당자명) 채택 |
 | open-8 | 개발 우선순위/일정 | 08 (8.4) | 잠정 순서 채택, 1~5 전부 구현 |
-| open-9 | 개발 기술 스택 | 11 | **확정**: React+TS / FastAPI / PostgreSQL ([`tech/01-stack-and-setup.md`](../tech/01-stack-and-setup.md)) |
+| open-9 | 개발 기술 스택 | 11 | **확정**: React+TS / FastAPI / **Firestore**([`tech/01-stack-and-setup.md`](../tech/01-stack-and-setup.md), 배포는 Vercel+Firebase — [`tech/12-firestore-migration.md`](../tech/12-firestore-migration.md)) |
 | open-10 | 수정 기능 상세 범위 | 04 (4.2) | 전체 필드 수정 / 상태 유지 / 감사로그 미구현. `status.py: apply_edit_policy()` |
-| open-11 | 관리번호 999 초과 / 동시 등록 충돌 | 06 | 초과 시 등록 차단(409). 동시성은 `FOR UPDATE` + `UNIQUE` |
+| open-11 | 관리번호 999 초과 / 동시 등록 충돌 | 06 | 초과 시 등록 차단(409). 동시성은 **Firestore 트랜잭션**(구 설계 `FOR UPDATE`+`UNIQUE`는 폐기 — `tech/12-firestore-migration.md` § 5) |
 
 > 협의 후 확정되면 이 표의 "임시 결정"을 갱신하고, 격리 위치(상수/정책 함수)만 수정하여 코드에 반영한다. 상세 근거는 [`tech/10-provisional-decisions.md`](../tech/10-provisional-decisions.md).
 
