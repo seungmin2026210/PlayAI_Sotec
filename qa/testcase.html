@@ -284,7 +284,7 @@
       <tbody>
         <tr><td class="id">EXPORT-01</td><td class="prio p0">P0</td><td class="scenario">개별 엑셀 다운로드</td><td class="steps">견적 상세에서 엑셀 export</td><td class="expect">파일 정상 다운로드·오픈</td><td><span class="badge badge-manual">수동</span></td></tr>
         <tr><td class="id">EXPORT-02</td><td class="prio p0">P0</td><td class="scenario">개별 PDF 다운로드</td><td class="steps">견적 상세에서 PDF export</td><td class="expect">파일 정상 다운로드·오픈</td><td><span class="badge badge-manual">수동</span></td></tr>
-        <tr><td class="id">EXPORT-03</td><td class="prio">P1</td><td class="scenario">PDF 생성 실패 폴백</td><td class="steps">WeasyPrint 미설치/오류 환경에서 PDF export</td><td class="expect">501 안내 메시지, 서버는 계속 정상 동작</td><td><span class="badge badge-manual">수동</span></td></tr>
+        <tr><td class="id">EXPORT-03</td><td class="prio">P1</td><td class="scenario">PDF 생성 실패 폴백</td><td class="steps">reportlab import/렌더링 오류 환경에서 PDF export</td><td class="expect">501 안내 메시지, 서버는 계속 정상 동작</td><td><span class="badge badge-manual">수동</span></td></tr>
         <tr><td class="id">EXPORT-04</td><td class="prio">P1</td><td class="scenario">승인됨만 직인 합성</td><td class="steps">제출됨·승인됨 각각 엑셀 export 비교</td><td class="expect">승인됨에만 직인 이미지 삽입</td><td><span class="badge badge-auto">자동</span></td></tr>
         <tr><td class="id">EXPORT-05</td><td class="prio">P1</td><td class="scenario">상태 무관 엑셀 생성</td><td class="steps">모든 상태에서 엑셀 export 시도</td><td class="expect">상태와 무관하게 항상 생성됨</td><td><span class="badge badge-auto">자동</span></td></tr>
         <tr><td class="id">EXPORT-06</td><td class="prio">P2</td><td class="scenario">엑셀 관리번호 표기</td><td class="steps">엑셀 파일 내 관리번호 셀 확인</td><td class="expect">"혁신 2026-B 008" 형식</td><td><span class="badge badge-auto">자동</span></td></tr>

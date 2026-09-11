@@ -3,7 +3,7 @@
 ## 도구
 
 - `pytest`, `httpx` + `fastapi.testclient.TestClient`.
-- 테스트 DB: 별도 PostgreSQL 스키마 또는 `DATABASE_URL_TEST`. 각 테스트 트랜잭션 롤백.
+- 테스트 DB: Firestore 에뮬레이터(`FIRESTORE_EMULATOR_HOST`, 기본 `127.0.0.1:8090`). 트랜잭션 롤백이 아니라 `conftest.py`가 매 테스트 전 `quotes`/`number_sequences`/`retired_numbers` 문서를 전부 지운다. 에뮬레이터 미기동 시 DB 테스트는 skip, `tests/unit/`만 실행됨(구 설계였던 별도 PostgreSQL 스키마/`DATABASE_URL_TEST`는 폐기 — [`12-firestore-migration.md`](./12-firestore-migration.md)).
 
 ## 단위 테스트 (`tests/test_calculation.py`)
 
@@ -61,4 +61,4 @@
 
 - Admin / test1 각각 로그인 → 버튼 노출 차이 육안 확인.
 - 등록 폼 실시간 합계·절사·부가세 미리보기.
-- PDF 다운로드 (WeasyPrint 가용 환경).
+- PDF 다운로드 (reportlab, 순수 파이썬이라 시스템 라이브러리 설치 여부와 무관하게 항상 가능 — 구 WeasyPrint 는 폐기됨).

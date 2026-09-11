@@ -15,9 +15,9 @@
 - 순번 3자리(999건) 초과 시 처리 방식 미정.
   → **임시 결정**: 1000번째 채번 시도 시 `409 Conflict` + 메시지 `"해당 그룹/연도 관리번호가 999건을 초과했습니다. 관리자에게 문의하세요."` 반환하고 등록 차단. 4자리 확장은 협의 후.
 - 동시 등록 시 시퀀스 중복 방지(동시성 제어) 필요.
-  → **구현**: `number_sequences` 테이블에 `(year, group_code)` PK, 채번 시 `SELECT ... FOR UPDATE`로 행 잠금 후 `last_seq + 1`. 관리번호 컬럼에 `UNIQUE` 제약 추가로 이중 안전장치.
+  → **구현**: `number_sequences/{year}-{group_code}` 문서를 Firestore 트랜잭션으로 읽고 `last_seq + 1`로 갱신(등록 자체와 같은 트랜잭션에 묶어 원자성 확보). 문서 ID가 `mgmt_no`이므로 중복 생성 자체가 불가능해 이중 안전장치 역할도 겸한다. (구 설계였던 PostgreSQL `SELECT ... FOR UPDATE` + `UNIQUE` 제약은 폐기됨 — [`tech/12-firestore-migration.md`](../tech/12-firestore-migration.md) 참고.)
 
 ## 구현 매핑
 
-- 알고리즘·트랜잭션: [`tech/05-numbering-implementation.md`](../tech/05-numbering-implementation.md).
-- 테이블: `number_sequences`, `retired_numbers` — [`tech/03-data-model.md`](../tech/03-data-model.md).
+- 알고리즘·트랜잭션: [`tech/05-numbering-implementation.md`](../tech/05-numbering-implementation.md), [`tech/12-firestore-migration.md`](../tech/12-firestore-migration.md) § 5.
+- 컬렉션: `number_sequences`, `retired_numbers` — 원 설계는 [`tech/03-data-model.md`](../tech/03-data-model.md)(폐기, 개념 참고용), 실제 문서 구조는 `tech/12-firestore-migration.md`.
