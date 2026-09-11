@@ -98,7 +98,7 @@ npm run build                     # tsc && vite build
 ```bash
 npx firebase-tools emulators:start --only firestore --project demo-quote &   # 미기동 시 DB 테스트는 skip
 cd backend && .venv\Scripts\activate
-pytest                            # 30 tests.
+pytest                            # 32 tests.
 ```
 - `conftest.py` 가 `FIRESTORE_EMULATOR_HOST`(기본 `127.0.0.1:8090`) 로 접속, 매 테스트 전 `quotes`/`number_sequences`/`retired_numbers` 문서를 전부 지운다(TRUNCATE 대응). 에뮬레이터 미기동 시 연결 실패로 DB 테스트는 skip, `tests/unit/` 만 실행.
 - 계산/채번 로직만 빠르게 확인: `python -c "from app.services.calculation import compute; ..."` (DB 불필요, 순수 함수)
