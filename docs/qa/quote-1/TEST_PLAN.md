@@ -4,7 +4,7 @@
 
 QUOTE-1 백엔드(FastAPI + Firestore) · 프론트엔드(React) 전체에 대한 수동/통합 테스트 계획.
 최근 작업(PDF export → reportlab 전환, DB → Firestore 마이그레이션) 이후 전체 기능이
-회귀 없이 동작하는지 확인하는 것이 목적. 자동화된 `pytest`(30개, `backend/tests/`)가
+회귀 없이 동작하는지 확인하는 것이 목적. 자동화된 `pytest`(32개, `backend/tests/`)가
 이미 이 케이스들의 상당수를 커버하지만, 이 문서는 **HTTP API 레벨 + 실제 PDF/엑셀 산출물
 내용 + 동시성**까지 눈으로/도구로 직접 확인하는 수동 QA 체크리스트다.
 
@@ -360,7 +360,7 @@ QUOTE-1 백엔드(FastAPI + Firestore) · 프론트엔드(React) 전체에 대�
 1. Firestore 에뮬레이터 기동 상태에서 `cd backend && pytest`
 
 **Expected Result:**
-- 30개 전부 `passed`, 실패/에러 없음
+- 32개 전부 `passed`, 실패/에러 없음
 
 ## Summary
 - Total Test Cases: 31
