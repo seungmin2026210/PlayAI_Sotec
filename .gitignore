@@ -16,6 +16,9 @@ firestore-debug.log
 ui-debug.log
 .firebase/
 
+# Vercel
+.vercel/
+
 # OS / editor
 .DS_Store
 Thumbs.db
