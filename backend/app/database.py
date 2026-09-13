@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import random
 import time
@@ -12,11 +13,26 @@ from typing import Callable, TypeVar
 
 from google.api_core.exceptions import Aborted
 from google.cloud import firestore
+from google.oauth2 import service_account
 
 from .config import settings
 
 _client: firestore.Client | None = None
 _T = TypeVar("_T")
+
+
+def _load_credentials() -> service_account.Credentials | None:
+    """Vercel 등 GCP 밖 환경 배포용. `GOOGLE_APPLICATION_CREDENTIALS_JSON`(서비스
+    계정 키 JSON 전체를 값으로 담은 환경변수)이 있으면 그걸로 인증정보를 메모리에서
+    바로 만든다. 없으면 None을 반환해 google-cloud-firestore 의 기본 인증 탐색
+    (`GOOGLE_APPLICATION_CREDENTIALS` 파일 경로, GCE/Cloud Run 메타데이터 서버 등)에
+    맡긴다. 12-firestore-migration.md § 9.
+    """
+    raw = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    if not raw:
+        return None
+    info = json.loads(raw)
+    return service_account.Credentials.from_service_account_info(info)
 
 
 def get_client() -> firestore.Client:
@@ -27,7 +43,10 @@ def get_client() -> firestore.Client:
         if settings.firestore_emulator_host and "FIRESTORE_EMULATOR_HOST" not in os.environ:
             os.environ["FIRESTORE_EMULATOR_HOST"] = settings.firestore_emulator_host
         project = os.getenv("FIRESTORE_PROJECT_ID", settings.firebase_project_id)
-        _client = firestore.Client(project=project)
+        # 에뮬레이터 사용 시엔 인증정보 자체가 불필요 — 명시적으로 넘기면 오히려
+        # 에뮬레이터 우회 동작과 충돌할 수 있어 이때는 None(=인증 없음)으로 둔다.
+        credentials = None if os.environ.get("FIRESTORE_EMULATOR_HOST") else _load_credentials()
+        _client = firestore.Client(project=project, credentials=credentials)
     return _client
 
 
