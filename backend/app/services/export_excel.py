@@ -1,55 +1,60 @@
 """엑셀 export — openpyxl. TECH 09.
 
-개별 견적서(`build_quote_xlsx`)는 실제 견적서.jpg 양식을 따른다:
-상단 자사/수신처 블록 → 인사말 → 합계금액 → 용역(계약) → 항목표(규격·세액·비고 포함)
-→ 합계 블록 → 대금결제/납품/WORK SCOPE → 서명란. APPROVED 견적서는 대표자명 옆에
-직인(config.SEAL_PATH)을 합성한다. 목록(`build_list_xlsx`)은 변경 없음.
+개별 견적서(`build_quote_xlsx`)는 원본 파일(`config.QUOTE_TEMPLATE_PATH` = 커밋된
+`견적서_위탁계약용.xlsx`)을 **그대로 열어 값만 채워 넣는다** — 서식(폰트·테두리·병합·
+채움색)을 코드로 재현하지 않는다. 코드로 재현했더니 폰트(Noto Sans CJK SC/맑은 고딕
+vs 기본 Calibri)·테두리(굵기가 medium/thin/dotted로 셀마다 다름)가 원본과 미묘하게
+달라 "육안으로 다르다"는 문제가 있었다(DECISIONS.md, tech/09-export.md) — 템플릿을
+직접 여는 지금 방식은 이 문제 자체가 생기지 않는다.
+공급가액/세액/합계 3행은 템플릿에 이미 있는 수식(`ROUNDDOWN(SUM(...),-5)` 등)을 그대로
+살려 둬서 우리가 쓴 항목 금액에서 자동 재계산된다 — 항목이 18행(템플릿이 서식을 미리
+잡아둔 행 수, `QUOTE_TEMPLATE_ITEM_ROWS`)을 넘는 경우에만 행을 늘리고 이 값들을 직접
+계산해 넣는다(`_extend_item_rows`). APPROVED 견적서는 대표자명 옆에 직인(config.SEAL_PATH)
+을 합성한다. 목록(`build_list_xlsx`)은 템플릿 없이 처음부터 만든다(변경 없음).
 """
 from __future__ import annotations
 
 import io
-from datetime import datetime
+from copy import copy
+from datetime import date, datetime
 
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font
 
 from ..config import (
     COMPANY,
+    COMPANY_BIZ_LINES,
     GROUPS,
     LOGO_PATH,
     QUOTE_AUTHOR_ROLE,
     QUOTE_AUTHOR_TEAM,
-    QUOTE_CONDITIONS,
-    QUOTE_GREETING,
-    QUOTE_GREETING_LINES,
-    QUOTE_SIGNOFF_COLS,
-    QUOTE_VALIDITY_NOTE,
+    QUOTE_RECIPIENT_HONORIFIC,
+    QUOTE_TEMPLATE_ITEM_ROWS,
+    QUOTE_TEMPLATE_PATH,
+    QUOTE_TEMPLATE_SHEET,
     SEAL_MM,
     SEAL_PATH,
     STATUS_APPROVED,
     STATUS_LABELS,
-    VAT_RATE,
 )
 from ..models import Quote
+from .calculation import korean_amount_words
 from .numbering import format_mgmt_no_display
 
 _WON = '#,##0"원"'
-_BOLD = Font(bold=True)
-_TITLE = Font(bold=True, size=20)
-_ITALIC = Font(italic=True, color="666666", size=9)
-_thin = Side(style="thin", color="999999")
-_BOX = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
-_HEAD_FILL = PatternFill("solid", fgColor="F2F2F2")
-_CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
-_LEFT = Alignment(horizontal="left", vertical="center", wrap_text=True)
-_RIGHT = Alignment(horizontal="right", vertical="center")
+_DATE_FMT = "%Y.%m.%d"
 
-_NCOLS = 9  # A..I
+_ITEM_FIRST_ROW = 16          # 템플릿 항목 표 첫 데이터 행
+_SUM_ROW_OFFSET = 34 - 16     # 합계 블록(공급가액 행)이 항목 표 첫 행에서 몇 줄 아래인지
+_ITEM_MERGES = ((2, 4), (7, 8), (9, 10), (11, 12), (13, 14))  # B:D, G:H, I:J, K:L, M:N
+
+
+def _fmt_date(d: date | None) -> str:
+    return d.strftime(_DATE_FMT) if d else ""
 
 
 def _add_logo(ws) -> int:
-    """워크시트 좌상단(A1)에 회사 로고. Pillow 미설치 등 실패 시 조용히 건너뛴다."""
+    """워크시트 좌상단(A1)에 회사 로고(목록 export 전용). 실패 시 조용히 건너뛴다."""
     if not LOGO_PATH.exists():
         return 1
     try:
@@ -65,22 +70,8 @@ def _add_logo(ws) -> int:
         return 1
 
 
-def _put(ws, cell: str, value, *, font=None, align=None, box=False, fill=False):
-    c = ws[cell]
-    c.value = value
-    if font:
-        c.font = font
-    if align:
-        c.alignment = align
-    if box:
-        c.border = _BOX
-    if fill:
-        c.fill = _HEAD_FILL
-    return c
-
-
 def _stamp_seal(ws, cell: str) -> None:
-    """APPROVED 견적서에 직인 합성. 파일/ Pillow 없으면 조용히 생략(로고와 동일 방침)."""
+    """APPROVED 견적서에 직인 합성. 파일/Pillow 없으면 조용히 생략(로고와 동일 방침)."""
     if not SEAL_PATH.exists():
         return
     try:
@@ -94,162 +85,100 @@ def _stamp_seal(ws, cell: str) -> None:
         pass
 
 
+def _extend_item_rows(ws, extra: int) -> int:
+    """항목이 템플릿 행 수(18)를 넘을 때만 호출 — 합계 블록 바로 위에 행을 끼워 넣고
+    마지막 항목 행(33행)의 서식(폰트·테두리·채움·병합·행높이·세액 수식)을 복제한다.
+    반환값: 늘어난 뒤의 마지막 항목 행 번호.
+    """
+    insert_at = _ITEM_FIRST_ROW + QUOTE_TEMPLATE_ITEM_ROWS  # 34 — 합계 블록 시작 행
+    template_row = insert_at - 1  # 33 — 서식 복제 원본
+    ws.insert_rows(insert_at, extra)
+    for offset in range(extra):
+        new_row = insert_at + offset
+        ws.row_dimensions[new_row].height = ws.row_dimensions[template_row].height
+        for col in range(2, 15):
+            src = ws.cell(row=template_row, column=col)
+            dst = ws.cell(row=new_row, column=col)
+            dst.font, dst.border, dst.fill = copy(src.font), copy(src.border), copy(src.fill)
+            dst.alignment, dst.number_format = copy(src.alignment), src.number_format
+        for c1, c2 in _ITEM_MERGES:
+            ws.merge_cells(start_row=new_row, start_column=c1, end_row=new_row, end_column=c2)
+        ws.cell(row=new_row, column=11, value=f"=ROUND(I{new_row}*0.1,0)")
+    return template_row + extra
+
+
 def build_quote_xlsx(q: Quote) -> bytes:
-    wb = Workbook()
-    ws = wb.active
+    wb = load_workbook(QUOTE_TEMPLATE_PATH)
+    ws = wb[QUOTE_TEMPLATE_SHEET]
     ws.title = "견적서"
-    ws.sheet_view.showGridLines = False
-    widths = [15, 16, 12, 12, 8, 13, 14, 13, 12]  # A..I
-    for i, w in enumerate(widths, start=1):
-        ws.column_dimensions[get_column_letter(i)].width = w
 
-    r = _add_logo(ws)
+    group_name = GROUPS.get(q.group_code, q.group_code)
 
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=_NCOLS)
-    _put(ws, f"A{r}", "견 적 서", font=_TITLE, align=_CENTER)
-    ws.row_dimensions[r].height = 30
-    r += 2
+    # ---- 견적NO -------------------------------------------------------------
+    mgmt_no_display = format_mgmt_no_display(q.seq_year, q.group_code, q.seq_no)
+    prefix_year_group, seq_str = mgmt_no_display.rsplit(" ", 1)
+    ws["M2"], ws["N2"] = prefix_year_group, seq_str
 
-    # ---- 좌: 견적 기본정보 / 우: 공급자 -------------------------------------
-    top = r
-    _put(ws, f"A{r}", "견적일자", font=_BOLD)
-    _put(ws, f"B{r}", q.issue_date.isoformat())
-    _put(ws, f"E{r}", "[ 공급자 (자사) ]", font=_BOLD)
-    r += 1
-    _put(ws, f"A{r}", "견적유효기간", font=_BOLD)
-    _put(ws, f"B{r}", QUOTE_VALIDITY_NOTE)
-    _put(ws, f"E{r}", "등록번호", font=_BOLD)
-    _put(ws, f"F{r}", COMPANY["biz_no"])
-    r += 1
-    _put(ws, f"A{r}", "견적 NO", font=_BOLD)
-    _put(ws, f"B{r}", format_mgmt_no_display(q.seq_year, q.group_code, q.seq_no))
-    _put(ws, f"E{r}", "상호", font=_BOLD)
-    _put(ws, f"F{r}", COMPANY["name"])
-    _put(ws, f"H{r}", "대표자", font=_BOLD)
-    ceo_cell = f"I{r}"
-    _put(ws, ceo_cell, f"{COMPANY['ceo_name']} (인)")
+    # ---- 견적 기본정보 / 공급자(자사) — 자사정보는 config.COMPANY 가 정본이라
+    #      템플릿에 이미 박혀 있는 값이라도 덮어써서 단일 출처를 지킨다 -----------
+    ws["C3"] = q.issue_date.isoformat()
+    ws["J3"] = COMPANY["biz_no"]
+    ws["J4"] = COMPANY["name"]
+    ceo_cell = "L4"
+    ws[ceo_cell] = f"{COMPANY['ceo_name']} (인)"
     if q.status == STATUS_APPROVED:
         _stamp_seal(ws, ceo_cell)
-    r += 1
-    _put(ws, f"E{r}", "주소", font=_BOLD)
-    _put(ws, f"F{r}", COMPANY.get("address", ""))
-    r += 1
-    _put(ws, f"A{r}", "[ 수신처 (고객사) ]", font=_BOLD)
-    _put(ws, f"E{r}", "업태", font=_BOLD)
-    _put(ws, f"F{r}", COMPANY.get("biz_type", ""))
-    _put(ws, f"H{r}", "종목", font=_BOLD)
-    _put(ws, f"I{r}", COMPANY.get("biz_item", ""))
-    r += 1
-    _put(ws, f"A{r}", "고객사명", font=_BOLD)
-    _put(ws, f"B{r}", q.customer_name)
-    _put(ws, f"E{r}", "전화번호", font=_BOLD)
-    _put(ws, f"F{r}", COMPANY.get("tel", ""))
-    _put(ws, f"H{r}", "FAX", font=_BOLD)
-    _put(ws, f"I{r}", COMPANY.get("fax", ""))
-    r += 1
-    _put(ws, f"A{r}", "담당자", font=_BOLD)
-    _put(ws, f"B{r}", q.customer_contact_name or "")
-    _put(ws, f"C{r}", q.customer_contact_phone or "")
-    _put(ws, f"E{r}", "견적 작성자", font=_BOLD)
-    _put(ws, f"F{r}", f"{QUOTE_AUTHOR_TEAM} {GROUPS.get(q.group_code, '')} / {QUOTE_AUTHOR_ROLE}")
-    r += 1
-    _put(ws, f"A{r}", "C.C", font=_BOLD)
-    _put(ws, f"B{r}", "")  # 참조자 — 데이터 없음(양식 자리만)
-    r = max(r, top + 8) + 2
+    ws["J5"] = COMPANY.get("address", "")
+    for i, (biz_type, biz_item) in enumerate(COMPANY_BIZ_LINES):
+        row = 6 + i
+        ws.cell(row=row, column=10, value=biz_type)   # J6~J8
+        ws.cell(row=row, column=12, value=biz_item)    # L6~L8
+    ws["J9"] = COMPANY.get("tel", "")
+    ws["L9"] = COMPANY.get("fax", "")
 
-    # ---- 인사말 ----------------------------------------------------------
-    _put(ws, f"A{r}", QUOTE_GREETING, font=_BOLD)
-    r += 1
-    for line in QUOTE_GREETING_LINES:
-        _put(ws, f"A{r}", line)
-        r += 1
-    r += 1
+    # ---- 수신처(고객사) -------------------------------------------------------
+    ws["B4"] = q.customer_name
+    ws["D4"] = q.customer_department or ""
+    ws["D5"] = q.customer_contact_name or ""
+    ws["F5"] = QUOTE_RECIPIENT_HONORIFIC if q.customer_contact_name else ""
+    ws["B6"] = f"C.C {q.customer_cc}" if q.customer_cc else ""
 
-    # ---- 합계금액 요약 --------------------------------------------------
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
-    _put(ws, f"A{r}", "합계금액 (공급가액 + 세액)", font=_BOLD, box=True, fill=True)
-    ws[f"B{r}"].border = _BOX
-    ws[f"B{r}"].fill = _HEAD_FILL
-    ws.merge_cells(start_row=r, start_column=3, end_row=r, end_column=4)
-    tc = _put(ws, f"C{r}", q.total_with_vat, font=Font(bold=True, size=13), align=_RIGHT, box=True)
-    tc.number_format = _WON
-    ws[f"D{r}"].border = _BOX
-    r += 2
+    # ---- 견적 작성처 정보 -----------------------------------------------------
+    ws["G10"] = f"견적 작성처 정보 : {QUOTE_AUTHOR_TEAM} {group_name} / {q.issuer_name} {QUOTE_AUTHOR_ROLE}"
 
-    # ---- 용역(계약) ---------------------------------------------------
-    _put(ws, f"A{r}", "용역(계약)명", font=_BOLD)
-    ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=_NCOLS)
-    _put(ws, f"B{r}", q.title, align=_LEFT)
-    r += 1
-    _put(ws, f"A{r}", "용역(계약) 기간", font=_BOLD)
-    _put(ws, f"B{r}", "")  # 데이터 없음(양식 자리만)
-    r += 2
+    # ---- 합계금액(한글 금액 표기) — K13 은 템플릿 수식(="(₩"&TEXT(I36,...))이
+    #      I36(합계) 을 참조해 그대로 재계산되므로 건드리지 않는다 -----------------
+    ws["E13"] = f"일금  {korean_amount_words(q.total_with_vat)}원정"
 
-    # ---- 항목 표 ----------------------------------------------------
-    headers = ["No", "품목", "규격", "수량", "단가", "공급가액", "세액", "비고"]
-    # 품목 2칸(B:C) 병합 → 실제 열 매핑
-    ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=3)
-    col_map = [1, 2, 4, 5, 6, 7, 8, 9]
-    for h, col in zip(headers, col_map):
-        _put(ws, f"{get_column_letter(col)}{r}", h, font=_BOLD, align=_CENTER, box=True, fill=True)
-    ws[f"C{r}"].border = _BOX
-    r += 1
+    # ---- 항목 표: I(공급가액)만 채우면 K(세액)·I34~I36(합계 블록)·K13 이 템플릿
+    #      수식으로 자동 재계산된다. 18행을 넘는 경우에만 직접 계산해 채운다 --------
+    overflow = len(q.items) - QUOTE_TEMPLATE_ITEM_ROWS
+    last_item_row = _extend_item_rows(ws, overflow) if overflow > 0 else _ITEM_FIRST_ROW + QUOTE_TEMPLATE_ITEM_ROWS - 1
 
-    for it in q.items:
-        line_vat = round(it.line_amount * VAT_RATE)
-        ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=3)
-        _put(ws, f"A{r}", it.line_no, align=_CENTER, box=True)
-        _put(ws, f"B{r}", it.name, align=_LEFT, box=True)
-        ws[f"C{r}"].border = _BOX
-        _put(ws, f"D{r}", "", box=True)  # 규격
-        _put(ws, f"E{r}", it.qty, align=_RIGHT, box=True).number_format = "#,##0"
-        _put(ws, f"F{r}", it.unit_price, align=_RIGHT, box=True).number_format = _WON
-        _put(ws, f"G{r}", it.line_amount, align=_RIGHT, box=True).number_format = _WON
-        _put(ws, f"H{r}", line_vat, align=_RIGHT, box=True).number_format = _WON
-        _put(ws, f"I{r}", "", box=True)  # 비고
-        r += 1
-    r += 1
+    for idx, it in enumerate(q.items):
+        row = _ITEM_FIRST_ROW + idx
+        ws.cell(row=row, column=2, value=it.name)  # B
+        ws.cell(row=row, column=5, value=_fmt_date(it.period_start))  # E
+        ws.cell(row=row, column=6, value="~" if (it.period_start or it.period_end) else "")  # F
+        ws.cell(row=row, column=7, value=_fmt_date(it.period_end))  # G
+        ws.cell(row=row, column=9, value=it.line_amount).number_format = _WON  # I
 
-    # ---- 합계 블록 ------------------------------------------------
-    def sum_row(label: str, value: int, *, bold=False) -> None:
-        nonlocal r
-        f = Font(bold=True) if bold else None
-        _put(ws, f"F{r}", label, font=f or _BOLD, align=_RIGHT)
-        ws.merge_cells(start_row=r, start_column=7, end_row=r, end_column=8)
-        vc = _put(ws, f"G{r}", value, font=f, align=_RIGHT)
-        vc.number_format = _WON
-        r += 1
+    # 템플릿 자체 예시 데이터가 R16~R19 에 박혀 있어(빈 칸 아님) 실제 항목 수보다
+    # 적으면 남은 행에 예시 문구가 그대로 남는다 — 명시적으로 비운다.
+    # (`ws.cell(value=None)`은 openpyxl 에서 "값을 안 준 것"과 구분이 안 돼 no-op —
+    # 반드시 `.value = None` 속성 대입으로 지워야 한다.)
+    for row in range(_ITEM_FIRST_ROW + len(q.items), last_item_row + 1):
+        for col in (2, 5, 6, 7, 9):
+            ws.cell(row=row, column=col).value = None
 
-    sum_row("공급가액 합계 (십만단위 절사)", q.supply_amount)
-    sum_row("세액 (10%)", q.vat_amount)
-    sum_row("합계금액", q.total_with_vat, bold=True)
-    _put(
-        ws, f"A{r}",
-        f"* 항목 합계 {q.items_raw_total:,}원 · 합계는 총액 기준 십만단위 절사. "
-        + ("부가세 포함 견적(고객 실지불액 = 합계금액)." if q.vat_included
-           else "부가세 미포함(별도) 견적."),
-        font=_ITALIC,
-    )
-    r += 2
-
-    # ---- 대금결제조건 / 납품조건 / WORK SCOPE -------------------
-    for i, (label, text) in enumerate(QUOTE_CONDITIONS, start=3):
-        _put(ws, f"A{r}", f"{i}. {label}", font=_BOLD)
-        ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=_NCOLS)
-        _put(ws, f"B{r}", text, align=_LEFT)
-        r += 1
-    r += 1
-
-    # ---- 서명란 -------------------------------------------------
-    _put(ws, f"F{r}", "결재", font=_BOLD, align=_CENTER, box=True, fill=True)
-    for j, col in enumerate(QUOTE_SIGNOFF_COLS):
-        cl = get_column_letter(7 + j)
-        _put(ws, f"{cl}{r}", col, font=_BOLD, align=_CENTER, box=True, fill=True)
-    r += 1
-    ws.row_dimensions[r].height = 44
-    _put(ws, f"F{r}", "", box=True)
-    for j in range(len(QUOTE_SIGNOFF_COLS)):
-        _put(ws, f"{get_column_letter(7 + j)}{r}", "", box=True)
+    if overflow > 0:
+        # 늘어난 행만큼 합계 수식 범위가 안 맞으므로(openpyxl 은 텍스트 수식을 자동
+        # 보정하지 않는다) 세 값 직접 기록 — Quote 저장 시 계산된 정본과 동일 값.
+        sum_row = last_item_row + 1
+        ws.cell(row=sum_row, column=9, value=q.supply_amount).number_format = _WON
+        ws.cell(row=sum_row + 1, column=9, value=q.vat_amount).number_format = _WON
+        ws.cell(row=sum_row + 2, column=9, value=q.total_with_vat).number_format = _WON
+        ws["K13"] = f"(₩{q.total_with_vat:,})"
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -267,9 +196,9 @@ def build_list_xlsx(quotes: list[Quote]) -> bytes:
         "발행담당자", "공급가액", "부가세", "부가세포함가", "부가세포함여부",
         "상태", "잠금여부", "등록시간",
     ]
-    for c, h in enumerate(headers, start=1):
-        cell = ws.cell(row=header_row, column=c, value=h)
-        cell.font = _BOLD
+    for c, hh in enumerate(headers, start=1):
+        cell = ws.cell(row=header_row, column=c, value=hh)
+        cell.font = Font(bold=True)
     widths = [12, 8, 18, 30, 24, 12, 12, 14, 12, 14, 12, 10, 8, 20]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=header_row, column=i).column_letter].width = w

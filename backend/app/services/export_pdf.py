@@ -19,7 +19,7 @@ from ..config import (
     GROUPS,
     QUOTE_AUTHOR_ROLE,
     QUOTE_AUTHOR_TEAM,
-    QUOTE_CONDITIONS,
+    QUOTE_CONDITION_LINES,
     QUOTE_GREETING,
     QUOTE_GREETING_LINES,
     QUOTE_SIGNOFF_COLS,
@@ -288,9 +288,11 @@ def _build_story(q: Quote) -> list:
     )
     story.append(Spacer(1, 10))
 
-    # ---- 대금결제조건 / 납품조건 / WORK SCOPE ---------------------------------
-    for n, (label, text) in enumerate(QUOTE_CONDITIONS, start=3):
-        story.append(Paragraph(f"<b>{n}. {label}</b> : {text}", normal))
+    # ---- 대금결제조건 / 납품조건 / WORK SCOPE / 납기 --------------------------
+    # 위탁계약형 전면대체(DECISIONS.md) 이후 문구 — PDF 레이아웃 자체는 아직 SW형
+    # 그대로라 셀 단위로는 엑셀과 다르다(엑셀 확정 후 별도 작업, tech/09-export.md).
+    for line in QUOTE_CONDITION_LINES:
+        story.append(Paragraph(line, normal))
     story.append(Spacer(1, 14))
 
     # ---- 서명란 ---------------------------------------------------------------

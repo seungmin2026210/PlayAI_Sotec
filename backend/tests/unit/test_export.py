@@ -18,11 +18,17 @@ from app.services.numbering import format_mgmt_no_display
 
 
 def _quote(status: str):
-    items = [NS(line_no=1, name="개발 용역", qty=1, unit_price=61_378_520, line_amount=61_378_520)]
+    items = [
+        NS(
+            line_no=1, name="개발 용역", qty=1, unit_price=61_378_520, line_amount=61_378_520,
+            period_start=datetime.date(2026, 8, 1), period_end=datetime.date(2026, 10, 31),
+        )
+    ]
     return NS(
         issue_date=datetime.date(2026, 7, 23),
         seq_year=2026, group_code="B", seq_no=8, mgmt_no="26-B-008",
-        customer_name="삼성중공업(주)", customer_contact_name="최성인", customer_contact_phone=None,
+        customer_name="삼성중공업(주)", customer_department="자동화인프라T/F",
+        customer_contact_name="최성인 TF리더님", customer_contact_phone=None, customer_cc=None,
         status=status, title="LNG 화물창 마킹로봇 운영 개발", issuer_name="홍길동", vat_included=True,
         supply_amount=61_300_000, vat_amount=6_130_000, total_with_vat=67_430_000,
         items_raw_total=61_378_520, items=items,

@@ -16,32 +16,36 @@ from app.services.calculation import compute
 
 SAMPLES = [
     dict(
-        group_code="A", title="사내 형상관리 도구 라이선스 견적", issue_date=date(2026, 3, 4),
-        issuer_name="김담당", customer_name="(주)가나다소프트",
-        customer_contact_name="이과장", customer_contact_phone="010-1111-2222",
+        group_code="A", title="크레인 충돌 방지 시스템 개발 위탁계약", issue_date=date(2026, 3, 4),
+        issuer_name="김담당", customer_name="(주)가나다중공업", customer_department="자동화인프라T/F",
+        customer_contact_name="이과장 TF리더님", customer_contact_phone=None, customer_cc=None,
         vat_included=True,
-        items=[("GitLab Ultimate 25석", 25, 480_000), ("도입 컨설팅", 1, 3_000_000)],
+        items=[
+            ("프레임워크 및 WAS 환경 구축", 1, 10_000_000, None, None),
+            ("프론트엔드 개발", 1, 15_000_000, date(2026, 6, 1), date(2026, 8, 31)),
+        ],
     ),
     dict(
-        group_code="A", title="정적분석 SW 갱신 견적", issue_date=date(2026, 5, 20),
-        issuer_name="김담당", customer_name="(주)가나다소프트",
-        customer_contact_name="이과장", customer_contact_phone=None,
+        group_code="A", title="정적분석 SW 도입 위탁계약", issue_date=date(2026, 5, 20),
+        issuer_name="김담당", customer_name="(주)가나다소프트", customer_department=None,
+        customer_contact_name="이과장", customer_contact_phone=None, customer_cc=None,
         vat_included=False,
-        items=[("SonarQube Enterprise 연간", 1, 12_400_000)],
+        items=[("SonarQube Enterprise 연간", 1, 12_400_000, None, None)],
     ),
     dict(
-        group_code="B", title="협업 메신저 엔터프라이즈 견적", issue_date=date(2026, 6, 1),
-        issuer_name="박프로", customer_name="스마트커머스",
-        customer_contact_name=None, customer_contact_phone=None,
+        group_code="B", title="협업 메신저 도입 위탁계약", issue_date=date(2026, 6, 1),
+        issuer_name="박프로", customer_name="스마트커머스", customer_department="IT운영팀",
+        customer_contact_name=None, customer_contact_phone=None, customer_cc="김참조 프로님",
         vat_included=True,
-        items=[("Slack Business+ 120석", 120, 15_000), ("SSO 연동 셋업", 1, 1_500_000)],
+        items=[("Slack Business+ 도입", 1, 15_000_000, None, None), ("SSO 연동 셋업", 1, 1_500_000, None, None)],
     ),
 ]
 
 
 class _I:
-    def __init__(self, name, qty, unit_price):
+    def __init__(self, name, qty, unit_price, period_start=None, period_end=None):
         self.name, self.qty, self.unit_price = name, qty, unit_price
+        self.period_start, self.period_end = period_start, period_end
 
 
 def reset(client) -> None:
@@ -74,8 +78,10 @@ def seed(client) -> None:
                 issue_date=s["issue_date"],
                 issuer_name=s["issuer_name"],
                 customer_name=s["customer_name"],
+                customer_department=s["customer_department"],
                 customer_contact_name=s["customer_contact_name"],
                 customer_contact_phone=s["customer_contact_phone"],
+                customer_cc=s["customer_cc"],
                 vat_included=s["vat_included"],
                 supply_amount=c.supply_amount,
                 vat_amount=c.vat_amount,
@@ -83,7 +89,8 @@ def seed(client) -> None:
                 items_raw_total=c.raw_total,
                 items=[
                     QuoteItem(line_no=idx, name=it.name, qty=it.qty, unit_price=it.unit_price,
-                              line_amount=it.qty * it.unit_price)
+                              line_amount=it.qty * it.unit_price,
+                              period_start=it.period_start, period_end=it.period_end)
                     for idx, it in enumerate(items, start=1)
                 ],
                 status=STATUS_SUBMITTED,

@@ -54,3 +54,42 @@ def compute(items) -> Computed:
 def format_won(n: int) -> str:
     """open-6 임시결정: 천단위 콤마 + '원'. 통화기호 미사용. 표기 규칙 격리 지점."""
     return f"{n:,}원"
+
+
+_DIGITS = ("", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구")
+_SMALL_UNITS = ("", "십", "백", "천")
+_BIG_UNITS = ("", "만", "억", "조", "경")
+
+
+def _four_digit_word(n: int) -> str:
+    """0~9999 → 한글 숫자말. 십/백/천 자리의 '일'은 생략(예: 10 -> 십, 1000 -> 천)."""
+    word = ""
+    for i, d in enumerate(f"{n:04d}"):
+        digit = int(d)
+        place = 3 - i
+        if digit == 0:
+            continue
+        word += _SMALL_UNITS[place] if digit == 1 and place > 0 else _DIGITS[digit] + _SMALL_UNITS[place]
+    return word
+
+
+def korean_amount_words(n: int) -> str:
+    """정수 원화 금액 → 한글 금액말(만/억/조 단위). 위탁계약형 엑셀 "일금 ○○○원정" 표기용.
+
+    예: 44000000 -> '사천사백만'. 개별 견적서 export(`services/export_excel.py`)
+    전용 — 통화 표기 규칙 격리 지점은 `format_won`과 동일하게 이 함수.
+    """
+    if n <= 0:
+        return "영"
+    groups: list[int] = []
+    remaining = n
+    while remaining > 0:
+        groups.append(remaining % 10_000)
+        remaining //= 10_000
+    words = []
+    for i in range(len(groups) - 1, -1, -1):
+        g = groups[i]
+        if g == 0:
+            continue
+        words.append(_four_digit_word(g) + _BIG_UNITS[i])
+    return "".join(words)

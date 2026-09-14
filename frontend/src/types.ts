@@ -28,6 +28,8 @@ export interface QuoteItem {
   qty: number;
   unit_price: number;
   line_amount: number;
+  period_start: string | null;
+  period_end: string | null;
 }
 
 export interface Quote {
@@ -41,8 +43,10 @@ export interface Quote {
   issue_date: string;
   issuer_name: string;
   customer_name: string;
+  customer_department: string | null;
   customer_contact_name: string | null;
   customer_contact_phone: string | null;
+  customer_cc: string | null;
   vat_included: boolean;
   supply_amount: number;
   vat_amount: number;
@@ -94,6 +98,8 @@ export interface ItemInput {
   name: string;
   qty: number;
   unit_price: number;
+  period_start: string | null;
+  period_end: string | null;
 }
 
 export interface QuotePayload {
@@ -102,8 +108,10 @@ export interface QuotePayload {
   issue_date: string;
   issuer_name: string;
   customer_name: string;
+  customer_department: string | null;
   customer_contact_name: string | null;
   customer_contact_phone: string | null;
+  customer_cc: string | null;
   vat_included: boolean;
   items: ItemInput[];
 }

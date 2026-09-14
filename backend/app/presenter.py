@@ -19,8 +19,10 @@ def to_quote_read(q: Quote) -> QuoteRead:
         issue_date=q.issue_date,
         issuer_name=q.issuer_name,
         customer_name=q.customer_name,
+        customer_department=q.customer_department,
         customer_contact_name=q.customer_contact_name,
         customer_contact_phone=q.customer_contact_phone,
+        customer_cc=q.customer_cc,
         vat_included=q.vat_included,
         supply_amount=q.supply_amount,
         vat_amount=q.vat_amount,
@@ -46,6 +48,8 @@ def to_quote_read(q: Quote) -> QuoteRead:
                 qty=i.qty,
                 unit_price=i.unit_price,
                 line_amount=i.line_amount,
+                period_start=i.period_start,
+                period_end=i.period_end,
             )
             for i in q.items
         ],

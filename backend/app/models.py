@@ -25,6 +25,8 @@ class QuoteItem:
     qty: int
     unit_price: int
     line_amount: int
+    period_start: date | None = None  # 용역(계약) 기간 — 위탁계약형 전용, 선택입력
+    period_end: date | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -33,6 +35,8 @@ class QuoteItem:
             "qty": self.qty,
             "unit_price": self.unit_price,
             "line_amount": self.line_amount,
+            "period_start": self.period_start.isoformat() if self.period_start else None,
+            "period_end": self.period_end.isoformat() if self.period_end else None,
         }
 
     @classmethod
@@ -43,6 +47,8 @@ class QuoteItem:
             qty=d["qty"],
             unit_price=d["unit_price"],
             line_amount=d["line_amount"],
+            period_start=_parse_date(d["period_start"]) if d.get("period_start") else None,
+            period_end=_parse_date(d["period_end"]) if d.get("period_end") else None,
         )
 
 
@@ -65,8 +71,10 @@ class Quote:
     issuer_name: str
 
     customer_name: str
+    customer_department: str | None
     customer_contact_name: str | None
     customer_contact_phone: str | None
+    customer_cc: str | None
 
     vat_included: bool
     supply_amount: int
@@ -102,8 +110,10 @@ class Quote:
             "issue_date": self.issue_date.isoformat(),
             "issuer_name": self.issuer_name,
             "customer_name": self.customer_name,
+            "customer_department": self.customer_department,
             "customer_contact_name": self.customer_contact_name,
             "customer_contact_phone": self.customer_contact_phone,
+            "customer_cc": self.customer_cc,
             "vat_included": self.vat_included,
             "supply_amount": self.supply_amount,
             "vat_amount": self.vat_amount,
@@ -136,8 +146,10 @@ class Quote:
             issue_date=_parse_date(data["issue_date"]),
             issuer_name=data["issuer_name"],
             customer_name=data["customer_name"],
+            customer_department=data.get("customer_department"),
             customer_contact_name=data.get("customer_contact_name"),
             customer_contact_phone=data.get("customer_contact_phone"),
+            customer_cc=data.get("customer_cc"),
             vat_included=data["vat_included"],
             supply_amount=data["supply_amount"],
             vat_amount=data["vat_amount"],

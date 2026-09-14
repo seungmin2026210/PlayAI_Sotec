@@ -79,17 +79,34 @@ ACCOUNTS: dict[str, dict] = {
 COMPANY: dict[str, str] = {
     "name": "쏘테크(주)",
     "biz_no": "612-81-23163",       # 사업자등록번호
-    "ceo_name": "신인규",
+    "ceo_name": "선인규",
     "address": "경남 거제 장평3로 75",
     "tel": "055-630-1263",
     "fax": "055-631-5286",
-    "biz_type": "정보통신업",                        # 업태
-    "biz_item": "응용 소프트웨어 개발 및 공급업",     # 종목
+    "biz_type": "정보통신업",                        # 업태 (단일값 참고용 — 출력물은 COMPANY_BIZ_LINES 사용)
+    "biz_item": "응용 소프트웨어 개발 및 공급업",     # 종목 (위와 동일)
 }
+# 견적서 출력물의 업태/종목 3행 — 실사업자등록증 기준 복수 등록 업태·종목
+# (`견적서_위탁계약용.xlsx` H6:I8/K6:K8~L8 전사). 순서 고정.
+COMPANY_BIZ_LINES: tuple[tuple[str, str], ...] = (
+    ("서비스", "선박임가공"),
+    ("정보통신업", "응용 소프트웨어 개발 및 공급업"),
+    ("서비스", "기술검사"),
+)
 
 # PDF/엑셀 견적서 출력물에 삽입하는 자사 로고. 파일 없으면 각 export 서비스가
 # 조용히 로고 없이 출력한다(PDF_UNAVAILABLE 과 동일하게 export 자체는 항상 성공).
+# 개별 견적서 엑셀(`build_quote_xlsx`)은 `견적서_위탁계약용.xlsx` 원본에 로고 영역이
+# 없어 로고를 넣지 않는다 — 목록 엑셀(`build_list_xlsx`)에서만 사용.
 LOGO_PATH: Path = Path(__file__).resolve().parent / "assets" / "sotec-logo.png"
+
+# 개별 견적서 엑셀의 원본 템플릿 — 바탕화면 `견적서_위탁계약용.xlsx` 를 셀 단위(서식·
+# 병합·테두리·폰트) 그대로 커밋해 둔 것. `build_quote_xlsx` 는 이 파일을 열어 값만
+# 채워 넣는다(스타일을 코드로 재현하지 않음 — 재현 시 폰트/테두리가 원본과 미묘하게
+# 달라지는 문제가 있었다, tech/09-export.md). 실제 양식이 바뀌면 이 파일만 교체한다.
+QUOTE_TEMPLATE_PATH: Path = Path(__file__).resolve().parent / "assets" / "quote_template_consignment.xlsx"
+QUOTE_TEMPLATE_SHEET = "위탁견적서"
+QUOTE_TEMPLATE_ITEM_ROWS = 18  # 템플릿이 미리 서식을 잡아둔 항목 행 수(R16~R33)
 
 # 승인(APPROVED) 견적서 export 에 대표자명 옆에 합성하는 직인.
 #   현재는 scripts/make_seal.py 로 만든 임시 "SOTEC" 직인. 실제 직인이 오면
@@ -104,25 +121,37 @@ FONT_REGULAR_PATH: Path = Path(__file__).resolve().parent / "assets" / "fonts" /
 FONT_BOLD_PATH: Path = Path(__file__).resolve().parent / "assets" / "fonts" / "NanumGothic-Bold.ttf"
 
 # ---------------------------------------------------------------------------
-# 견적서 출력물(엑셀/PDF) 정형 문구 — 실제 견적서.jpg 에서 전사.
-#   협의로 문구가 확정되면 이 블록만 수정한다(격리 지점, tech/09-export.md).
+# 견적서 출력물(엑셀/PDF) 정형 문구 — `견적서_위탁계약용.xlsx`(바탕화면, 실제 발행 양식)
+#   에서 전사(DECISIONS.md: 위탁계약형 전면대체). 협의로 문구가 확정되면 이 블록만
+#   수정한다(격리 지점, tech/09-export.md).
 # ---------------------------------------------------------------------------
 MGMT_NO_DISPLAY_PREFIX = "혁신"          # 출력용 견적NO 접두어. 저장 mgmt_no 는 26-B-008 그대로.
+                                          # 부서별로 다를 수 있음(예: 의장설계팀="의장") — 지금은
+                                          # 이 팀만 쓰므로 전역 고정, 협의 전까지 미정(provisional).
 QUOTE_VALIDITY_NOTE = "견적일로부터 30일"  # 견적유효기간
-QUOTE_AUTHOR_TEAM = "스마트혁신팀"         # 견적 작성자 정보 = 이 팀 + 견적 그룹명
-QUOTE_AUTHOR_ROLE = "구성원 그룹장"
+QUOTE_AUTHOR_TEAM = "스마트혁신팀"         # 견적 작성처 정보 = 이 팀 + 견적 그룹명 + 발행담당자명 + 아래 직급
+QUOTE_AUTHOR_ROLE = "그룹장"               # 발행담당자명 뒤에 붙는 고정 직급 표기(모든 담당자가 실제로
+                                          # 이 직급은 아닐 수 있음 — 격리 지점, tech/09-export.md)
+QUOTE_RECIPIENT_HONORIFIC = "귀하"         # 수신처 담당자명 뒤 존칭
 
-QUOTE_GREETING = "아래와 같이 견적합니다."
+QUOTE_GREETING = "아래와 같이 견적합니다."  # 수신처 블록 마지막 줄
 QUOTE_GREETING_LINES = (
-    "1. 귀사의 무궁한 발전을 기원합니다.",
-    "2. 귀부서의 업무 협조에 깊은 감사를 드리며, 상기와 같이 견적서를 제출합니다.",
+    "1. 귀사의 일익 번창하심을 기원합니다.",
+    "2. 귀부서의 업무 협조에 깊은 감사를 드리며, 상기의 건 관련하여 견적서를 아래와 같이 제출합니다.",
 )
-QUOTE_CONDITIONS = (
-    ("대금결제조건", "귀사의 결제조건에 따름."),
-    ("납품조건", ""),
-    ("WORK SCOPE", "귀사의 설계용역 범위내 준용."),
+# 대금결제조건/납품조건/WORK SCOPE/납기 — 번호·들여쓰기까지 원본 그대로(줄 단위 상수).
+QUOTE_CONDITION_LINES = (
+    "3. 대금 결제조건 : 귀사의 결제 조건에 따름.",
+    "4. 납품조건",
+    "   - 제출용 : 귀사의 작성 기준에 준함.",
+    "5. WORK SCOPE : 귀사의 설계용역 범위내",
+    "6. 납  기 : 귀사의 일정에 준하여 일정표 제출 예정임",
 )
-QUOTE_SIGNOFF_COLS = ("작성", "검토", "승인")   # 우측 서명란
+# PDF(services/export_pdf.py)만 아직 쓰는 레거시 상수(서명란) — 개별 견적서 PDF 는
+# 이번 위탁계약형 전면대체 범위 밖(엑셀 확정 후 별도 작업, DECISIONS.md). PDF 는 문구만
+# 새 값으로 바뀌고 레이아웃(서명란 포함)은 옛 SW형 그대로 유지 — 셀 단위로는 엑셀과
+# 다르다. 재작업 시 제거.
+QUOTE_SIGNOFF_COLS = ("작성", "검토", "승인")
 
 # ---------------------------------------------------------------------------
 # 계산 상수 (기획서 5장 / 확정)
