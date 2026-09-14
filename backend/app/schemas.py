@@ -44,7 +44,9 @@ class MetaResponse(BaseModel):
 class ItemIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     qty: int
-    unit_price: int  # 공급가액 기준
+    unit_price: int  # 공급가액 기준(위탁계약형은 항목별 공급가액 직접 입력 — qty=1 고정, unit_price=그 금액)
+    period_start: date | None = None  # 용역(계약) 기간 — 위탁계약형 전용, 선택입력
+    period_end: date | None = None
 
     @field_validator("qty")
     @classmethod
@@ -69,6 +71,8 @@ class ItemOut(BaseModel):
     qty: int
     unit_price: int
     line_amount: int
+    period_start: date | None
+    period_end: date | None
 
 
 # --------------------------------------------------------------------------- quote
@@ -78,8 +82,10 @@ class QuoteCreate(BaseModel):
     issue_date: date
     issuer_name: str = Field(min_length=1, max_length=80)
     customer_name: str = Field(min_length=1, max_length=200)
+    customer_department: str | None = Field(default=None, max_length=100)  # 수신처 부서명
     customer_contact_name: str | None = Field(default=None, max_length=80)
     customer_contact_phone: str | None = Field(default=None, max_length=40)
+    customer_cc: str | None = Field(default=None, max_length=80)  # C.C 참조인(선택)
     vat_included: bool
     items: list[ItemIn] = Field(min_length=1)
 
@@ -121,8 +127,10 @@ class QuoteRead(BaseModel):
     issuer_name: str
 
     customer_name: str
+    customer_department: str | None
     customer_contact_name: str | None
     customer_contact_phone: str | None
+    customer_cc: str | None
 
     vat_included: bool
     supply_amount: int

@@ -11,7 +11,7 @@ export function ItemsEditor({ items, onChange }: Props) {
     onChange(items.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
   }
   function addRow() {
-    onChange([...items, { name: "", qty: 1, unit_price: 0 }]);
+    onChange([...items, { name: "", qty: 1, unit_price: 0, period_start: null, period_end: null }]);
   }
   function removeRow(idx: number) {
     onChange(items.filter((_, i) => i !== idx));
@@ -21,10 +21,10 @@ export function ItemsEditor({ items, onChange }: Props) {
     <table className="items-editor">
       <thead>
         <tr>
-          <th style={{ width: "44%" }}>품목</th>
-          <th style={{ width: "14%" }}>갯수</th>
-          <th style={{ width: "20%" }}>단가(공급가액)</th>
-          <th style={{ width: "18%" }}>금액</th>
+          <th style={{ width: "34%" }}>용역(계약)</th>
+          <th style={{ width: "16%" }}>기간 시작</th>
+          <th style={{ width: "16%" }}>기간 종료</th>
+          <th style={{ width: "26%" }}>공급가액</th>
           <th style={{ width: "4%" }} />
         </tr>
       </thead>
@@ -35,15 +35,21 @@ export function ItemsEditor({ items, onChange }: Props) {
               <input
                 value={it.name}
                 onChange={(e) => update(idx, { name: e.target.value })}
-                placeholder="예: SonarQube Enterprise 연간"
+                placeholder="예: 프론트엔드 개발"
               />
             </td>
             <td>
               <input
-                type="number"
-                min={1}
-                value={it.qty}
-                onChange={(e) => update(idx, { qty: Number(e.target.value) })}
+                type="date"
+                value={it.period_start ?? ""}
+                onChange={(e) => update(idx, { period_start: e.target.value || null })}
+              />
+            </td>
+            <td>
+              <input
+                type="date"
+                value={it.period_end ?? ""}
+                onChange={(e) => update(idx, { period_end: e.target.value || null })}
               />
             </td>
             <td>
@@ -51,11 +57,9 @@ export function ItemsEditor({ items, onChange }: Props) {
                 type="number"
                 min={1}
                 value={it.unit_price}
-                onChange={(e) => update(idx, { unit_price: Number(e.target.value) })}
+                onChange={(e) => update(idx, { qty: 1, unit_price: Number(e.target.value) })}
               />
-            </td>
-            <td className="num">
-              {formatWon((Number(it.qty) || 0) * (Number(it.unit_price) || 0))}
+              <span className="num">{formatWon(Number(it.unit_price) || 0)}</span>
             </td>
             <td>
               <button

@@ -111,8 +111,10 @@ def apply_edit_policy(quote: Quote, payload, computed) -> None:
     quote.issue_date = payload.issue_date
     quote.issuer_name = payload.issuer_name
     quote.customer_name = payload.customer_name
+    quote.customer_department = payload.customer_department
     quote.customer_contact_name = payload.customer_contact_name
     quote.customer_contact_phone = payload.customer_contact_phone
+    quote.customer_cc = payload.customer_cc
     quote.vat_included = payload.vat_included
 
     quote.items_raw_total = computed.raw_total

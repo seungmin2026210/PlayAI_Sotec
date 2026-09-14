@@ -52,7 +52,11 @@ def _now() -> datetime:
 
 def _build_items(items) -> list[QuoteItem]:
     return [
-        QuoteItem(line_no=idx, name=it.name, qty=it.qty, unit_price=it.unit_price, line_amount=it.qty * it.unit_price)
+        QuoteItem(
+            line_no=idx, name=it.name, qty=it.qty, unit_price=it.unit_price,
+            line_amount=it.qty * it.unit_price,
+            period_start=it.period_start, period_end=it.period_end,
+        )
         for idx, it in enumerate(items, start=1)
     ]
 
@@ -146,8 +150,10 @@ def create_quote(
             issue_date=body.issue_date,
             issuer_name=body.issuer_name,
             customer_name=body.customer_name,
+            customer_department=body.customer_department,
             customer_contact_name=body.customer_contact_name,
             customer_contact_phone=body.customer_contact_phone,
+            customer_cc=body.customer_cc,
             vat_included=body.vat_included,
             supply_amount=computed.supply_amount,
             vat_amount=computed.vat_amount,

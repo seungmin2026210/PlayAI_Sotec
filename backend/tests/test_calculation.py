@@ -3,6 +3,7 @@ from app.services.calculation import (
     compute,
     format_won,
     items_raw_total,
+    korean_amount_words,
     truncate_supply,
     vat_of,
 )
@@ -43,3 +44,11 @@ def test_compute_end_to_end():
 def test_format_won():
     assert format_won(13_530_000) == "13,530,000원"
     assert format_won(0) == "0원"
+
+
+def test_korean_amount_words():
+    # 견적서_위탁계약용.xlsx / _기성계약용.xlsx 실사값 대조(9-export.md).
+    assert korean_amount_words(44_000_000) == "사천사백만"
+    assert korean_amount_words(44_376_508) == "사천사백삼십칠만육천오백팔"
+    assert korean_amount_words(10_000) == "일만"
+    assert korean_amount_words(0) == "영"

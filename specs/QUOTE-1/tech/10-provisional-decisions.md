@@ -16,6 +16,7 @@
 | open-9 | 기술 스택 | React+TS / FastAPI / **Firestore**(배포: Vercel+Firebase) | [01-stack-and-setup.md](./01-stack-and-setup.md), [12-firestore-migration.md](./12-firestore-migration.md) |
 | open-10 | 수정 상세 범위 | 전체 필드 / 상태 유지 / 감사로그 미기록 | `backend services/status.py: apply_edit_policy` |
 | open-11 | 999 초과 / 동시성 | 초과 시 409 차단, **Firestore 트랜잭션**(구 `FOR UPDATE`+`UNIQUE`는 폐기) | `backend services/numbering.py: allocate_in`, [12-firestore-migration.md § 5](./12-firestore-migration.md) |
+| open-12 | 견적NO 표시 접두어가 부서마다 다른지(원본 샘플 "혁신"/"의장") | 전역 상수 "혁신" 고정(지금은 이 팀만 발행) | `backend/app/config.py: MGMT_NO_DISPLAY_PREFIX` |
 
 ## 담당자 실명 표기 (PRODUCT 03 주석)
 

@@ -173,10 +173,14 @@ export function QuoteDetail() {
           <dl>
             <dt>고객사명</dt>
             <dd>{quote.customer_name}</dd>
+            <dt>부서명</dt>
+            <dd>{quote.customer_department || "-"}</dd>
             <dt>담당자</dt>
             <dd>{quote.customer_contact_name || "-"}</dd>
             <dt>연락처</dt>
             <dd>{quote.customer_contact_phone || "-"}</dd>
+            <dt>C.C</dt>
+            <dd>{quote.customer_cc || "-"}</dd>
           </dl>
         </div>
 
@@ -201,10 +205,9 @@ export function QuoteDetail() {
           <thead>
             <tr>
               <th>No</th>
-              <th>품목</th>
-              <th className="num">갯수</th>
-              <th className="num">단가(공급가액)</th>
-              <th className="num">금액</th>
+              <th>용역(계약)</th>
+              <th>기간</th>
+              <th className="num">공급가액</th>
             </tr>
           </thead>
           <tbody>
@@ -212,30 +215,29 @@ export function QuoteDetail() {
               <tr key={it.line_no}>
                 <td>{it.line_no}</td>
                 <td>{it.name}</td>
-                <td className="num">{it.qty.toLocaleString("ko-KR")}</td>
-                <td className="num">{formatWon(it.unit_price)}</td>
+                <td>{it.period_start || it.period_end ? `${it.period_start ?? ""} ~ ${it.period_end ?? ""}` : "-"}</td>
                 <td className="num">{formatWon(it.line_amount)}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={3} />
+              <td colSpan={2} />
               <th>공급가액 합계 (십만단위 절사)</th>
               <td className="num">{formatWon(quote.supply_amount)}</td>
             </tr>
             <tr>
-              <td colSpan={3} />
+              <td colSpan={2} />
               <th>세액 (10%)</th>
               <td className="num">{formatWon(quote.vat_amount)}</td>
             </tr>
             <tr className="total">
-              <td colSpan={3} />
+              <td colSpan={2} />
               <th>합계금액</th>
               <td className="num">{formatWon(quote.total_with_vat)}</td>
             </tr>
             <tr className="foot-note">
-              <td colSpan={5}>
+              <td colSpan={4}>
                 항목 합계 {formatWon(quote.items_raw_total)} · 합계는 총액 기준 십만단위 절사 ·{" "}
                 {quote.vat_included
                   ? "부가세 포함 견적(고객 실지불액 = 합계금액)"

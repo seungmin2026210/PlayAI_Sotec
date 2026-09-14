@@ -17,10 +17,12 @@ const BLANK: QuotePayload = {
   issue_date: todayIso(),
   issuer_name: "",
   customer_name: "",
+  customer_department: "",
   customer_contact_name: "",
   customer_contact_phone: "",
+  customer_cc: "",
   vat_included: true,
-  items: [{ name: "", qty: 1, unit_price: 0 }],
+  items: [{ name: "", qty: 1, unit_price: 0, period_start: null, period_end: null }],
 };
 
 export function QuoteForm({ mode }: { mode: "create" | "edit" }) {
@@ -51,13 +53,17 @@ export function QuoteForm({ mode }: { mode: "create" | "edit" }) {
           issue_date: q.issue_date,
           issuer_name: q.issuer_name,
           customer_name: q.customer_name,
+          customer_department: q.customer_department ?? "",
           customer_contact_name: q.customer_contact_name ?? "",
           customer_contact_phone: q.customer_contact_phone ?? "",
+          customer_cc: q.customer_cc ?? "",
           vat_included: q.vat_included,
           items: q.items.map((it) => ({
             name: it.name,
             qty: it.qty,
             unit_price: it.unit_price,
+            period_start: it.period_start,
+            period_end: it.period_end,
           })),
         });
       })
@@ -100,12 +106,16 @@ export function QuoteForm({ mode }: { mode: "create" | "edit" }) {
     setBusy(true);
     const payload: QuotePayload = {
       ...form,
+      customer_department: form.customer_department || null,
       customer_contact_name: form.customer_contact_name || null,
       customer_contact_phone: form.customer_contact_phone || null,
+      customer_cc: form.customer_cc || null,
       items: form.items.map((it) => ({
         name: it.name.trim(),
         qty: Number(it.qty),
         unit_price: Number(it.unit_price),
+        period_start: it.period_start || null,
+        period_end: it.period_end || null,
       })),
     };
     try {
@@ -190,7 +200,14 @@ export function QuoteForm({ mode }: { mode: "create" | "edit" }) {
               />
             </label>
             <label>
-              담당자명
+              부서명
+              <input
+                value={form.customer_department ?? ""}
+                onChange={(e) => set("customer_department", e.target.value)}
+              />
+            </label>
+            <label>
+              담당자명 (직함 포함, 예: 홍길동 팀장님)
               <input
                 value={form.customer_contact_name ?? ""}
                 onChange={(e) => set("customer_contact_name", e.target.value)}
@@ -201,6 +218,13 @@ export function QuoteForm({ mode }: { mode: "create" | "edit" }) {
               <input
                 value={form.customer_contact_phone ?? ""}
                 onChange={(e) => set("customer_contact_phone", e.target.value)}
+              />
+            </label>
+            <label>
+              C.C (참조인)
+              <input
+                value={form.customer_cc ?? ""}
+                onChange={(e) => set("customer_cc", e.target.value)}
               />
             </label>
           </div>
