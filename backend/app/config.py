@@ -113,6 +113,11 @@ QUOTE_TEMPLATE_ITEM_ROWS = 18  # 템플릿이 미리 서식을 잡아둔 항목 
 #   같은 경로에 파일만 교체하면 된다(크기가 달라도 SEAL_MM 으로 흡수).
 SEAL_PATH: Path = Path(__file__).resolve().parent / "assets" / "sotec-seal.png"
 SEAL_MM: float = 22.0            # 출력물에서 직인 한 변 길이(mm). 실제 직인 비율에 맞게 조정.
+# 대표자명 셀(L4, 병합 L4:N4)에 "{대표자명} (인)"이 가운데정렬로 들어가 있어, 셀
+# 왼쪽 끝에 그대로 합성하면 이름 위에 겹친다 — "(인)" 글자 쪽으로 밀기 위한 가로
+# 오프셋(mm). 대표자명 길이가 바뀌면(글자 수 등) 눈대중으로 같이 조정해야 하는
+# 값이라 SEAL_MM 과 함께 여기 둔다(임시/눈대중 값 — 실측 후 조정).
+SEAL_OFFSET_X_MM: float = 15.0
 
 # PDF export(services/export_pdf.py) 한글 폰트. reportlab 로 PDF 안에 직접 임베드해서
 # 시스템에 한글 폰트/네이티브 라이브러리가 전혀 없어도(Vercel Serverless 등) 동작하게 한다.

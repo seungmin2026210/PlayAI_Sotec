@@ -9,8 +9,9 @@ vs 기본 Calibri)·테두리(굵기가 medium/thin/dotted로 셀마다 다름)�
 공급가액/세액/합계 3행은 템플릿에 이미 있는 수식(`ROUNDDOWN(SUM(...),-5)` 등)을 그대로
 살려 둬서 우리가 쓴 항목 금액에서 자동 재계산된다 — 항목이 18행(템플릿이 서식을 미리
 잡아둔 행 수, `QUOTE_TEMPLATE_ITEM_ROWS`)을 넘는 경우에만 행을 늘리고 이 값들을 직접
-계산해 넣는다(`_extend_item_rows`). APPROVED 견적서는 대표자명 옆에 직인(config.SEAL_PATH)
-을 합성한다. 목록(`build_list_xlsx`)은 템플릿 없이 처음부터 만든다(변경 없음).
+계산해 넣는다(`_extend_item_rows`). APPROVED 견적서는 대표자명 셀의 "(인)" 위에 직인
+(config.SEAL_PATH, 위치는 config.SEAL_OFFSET_X_MM)을 합성한다. 목록(`build_list_xlsx`)
+은 템플릿 없이 처음부터 만든다(변경 없음).
 """
 from __future__ import annotations
 
@@ -33,6 +34,7 @@ from ..config import (
     QUOTE_TEMPLATE_PATH,
     QUOTE_TEMPLATE_SHEET,
     SEAL_MM,
+    SEAL_OFFSET_X_MM,
     SEAL_PATH,
     STATUS_APPROVED,
     STATUS_LABELS,
@@ -71,16 +73,31 @@ def _add_logo(ws) -> int:
 
 
 def _stamp_seal(ws, cell: str) -> None:
-    """APPROVED 견적서에 직인 합성. 파일/Pillow 없으면 조용히 생략(로고와 동일 방침)."""
+    """APPROVED 견적서에 직인 합성. 대표자명 셀이 "{이름} (인)" 가운데정렬이라
+    셀 왼쪽 끝(이름 위)이 아니라 SEAL_OFFSET_X_MM 만큼 오른쪽(= "(인)" 쪽)으로
+    민 위치에 앉힌다. 파일/Pillow 없으면 조용히 생략(로고와 동일 방침)."""
     if not SEAL_PATH.exists():
         return
     try:
         from openpyxl.drawing.image import Image as XLImage  # noqa: PLC0415
+        from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor  # noqa: PLC0415
+        from openpyxl.drawing.xdr import XDRPositiveSize2D  # noqa: PLC0415
+        from openpyxl.utils.cell import column_index_from_string, coordinate_from_string  # noqa: PLC0415
+        from openpyxl.utils.units import pixels_to_EMU  # noqa: PLC0415
 
         px = int(SEAL_MM / 25.4 * 96)  # mm -> px @96dpi
+        offset_px = int(SEAL_OFFSET_X_MM / 25.4 * 96)
         img = XLImage(str(SEAL_PATH))
         img.width = img.height = px
-        ws.add_image(img, cell)
+        col_letter, row = coordinate_from_string(cell)
+        marker = AnchorMarker(
+            col=column_index_from_string(col_letter) - 1,
+            colOff=pixels_to_EMU(offset_px),
+            row=row - 1,
+            rowOff=0,
+        )
+        img.anchor = OneCellAnchor(_from=marker, ext=XDRPositiveSize2D(pixels_to_EMU(px), pixels_to_EMU(px)))
+        ws.add_image(img)
     except Exception:  # pragma: no cover - 환경 의존
         pass
 
