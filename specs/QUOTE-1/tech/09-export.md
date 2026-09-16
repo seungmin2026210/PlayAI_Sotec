@@ -12,11 +12,12 @@
 man-day형, 십만단위 절사 없이 단순 합산 — 위탁계약형과 계산 로직 자체가 다름)은 이번 범위
 밖 — 실제로 필요해지면 별도 문서유형으로 추가한다(지금은 `Quote`에 문서유형 필드 없음, YAGNI).
 
-PDF(`build_quote_pdf`)는 **이번 범위 밖**(엑셀 확정 후 별도 작업) — 레이아웃은 옛 SW형 그대로고
-문구 상수만 새 값을 그대로 물려받는다(아래 "개별 견적서 — PDF" 절 참고). 양식/문구 상수는
-`config.py` 한 곳(`COMPANY`, `COMPANY_BIZ_LINES`, `MGMT_NO_DISPLAY_PREFIX`, `QUOTE_VALIDITY_NOTE`,
-`QUOTE_AUTHOR_TEAM/ROLE`, `QUOTE_RECIPIENT_HONORIFIC`, `QUOTE_GREETING(_LINES)`,
-`QUOTE_CONDITION_LINES`, `SEAL_PATH`, `SEAL_MM`)에 격리 — 협의로 확정되면 이 블록만 고친다.
+PDF(`build_quote_pdf`)도 위탁계약형 엑셀과 동일 구성으로 재작성했다(아래 "개별 견적서 — PDF" 절
+참고) — 셀 좌표가 아니라 reportlab Platypus 로 표현 가능한 동등 레이아웃(섹션 순서·항목 표 컬럼·
+직인 위치·조건 문구 굵게 처리)으로 맞췄다. 양식/문구 상수는 `config.py` 한 곳(`COMPANY`,
+`COMPANY_BIZ_LINES`, `MGMT_NO_DISPLAY_PREFIX`, `QUOTE_VALIDITY_NOTE`, `QUOTE_AUTHOR_TEAM/ROLE`,
+`QUOTE_RECIPIENT_HONORIFIC`, `QUOTE_GREETING(_LINES)`, `QUOTE_CONDITION_LINES`, `SEAL_PATH`,
+`SEAL_MM`)에 격리 — 협의로 확정되면 이 블록만 고친다(엑셀·PDF 둘 다 동시 반영됨).
 
 ## 로고 (`config.LOGO_PATH` → `backend/app/assets/sotec-logo.png`)
 
@@ -82,16 +83,39 @@ PDF(`build_quote_pdf`)는 **이번 범위 밖**(엑셀 확정 후 별도 작업)
 - 응답: `StreamingResponse`, `Content-Disposition: attachment; filename="<mgmt_no>.xlsx"`,
   MIME `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
 
-## 개별 견적서 — PDF (`services/export_pdf.py: build_quote_pdf`) — 이번 범위 밖
+## 개별 견적서 — PDF (`services/export_pdf.py: build_quote_pdf`)
 
-- **레이아웃은 옛 SW 품목형 그대로 유지 중** — 위탁계약형 엑셀이 확정된 뒤 별도 작업으로
-  재작성한다(그릴링 합의사항, 엑셀부터 먼저). 문구 상수(`QUOTE_GREETING(_LINES)`,
-  `QUOTE_CONDITION_LINES`, `QUOTE_AUTHOR_ROLE` 등)는 위탁계약형 값을 그대로 물려받아
-  내용은 새 문구가 나가지만, 섹션 구성(수량/단가/규격 열이 있는 8열 항목표, 서명란 등)은
-  엑셀과 다르다 — 재작업 전까지 의도된 불일치.
-- **reportlab**(Platypus: `Table`/`Paragraph`/`Image`) 로 직접 구성 — HTML/CSS 중간 표현 없음.
-  이전 구현(WeasyPrint, HTML→PDF)은 시스템 라이브러리(`libpango` 등)가 필요해 Vercel Serverless
-  같은 서버리스 환경에서 동작하지 않아 reportlab(순수 파이썬)으로 교체(DECISIONS.md 참조).
+- **엑셀과 같은 워크북을 셀 그리드째로 그대로 그린다** — 엑셀 전용 별도 프로그램(LibreOffice
+  등)으로 파일을 변환하는 게 아니라, `export_excel.build_quote_workbook(q)`(엑셀 export 와
+  공유하는 워크북 생성 함수 — export_excel.py 참고)가 만든, 값이 채워진 openpyxl 워크시트를
+  `export_pdf.py` 가 직접 좌표 계산해서 reportlab 캔버스에 그린다(`_render_workbook_pdf`).
+  열 너비·행 높이·병합 범위·테두리·배경색·정렬·굵기(rich-text 부분굵게 포함)를 셀에서 그대로
+  읽어 재현하므로, 라벨 문구·인사말·대금결제조건 문구·강조 규칙이 전부 "엑셀에 있는 그대로"다
+  — 이전엔 이 문구들을 `config.py` 상수로 따로 옮겨 적어 엑셀이 바뀌면 PDF 도 손으로 맞춰야
+  했는데(2026-09 상반기), 이제는 템플릿 파일만 바꾸면 PDF 도 자동으로 따라간다.
+  - 페이지 배치는 템플릿의 인쇄 설정(`ws.page_margins`, "한 페이지에 맞추기") 그대로 반영해
+    A4 안에 맞춘다(가로/세로 중 더 작은 배율로 축소, 확대는 하지 않음).
+  - 엑셀은 항목별 세액·합계 블록(공급가액/세액/합계)·K13(₩표기)을 시트 수식(`=ROUND(...)`,
+    `=ROUNDDOWN(...)`)으로 남겨 Excel 이 열 때 재계산하지만, PDF 는 수식 엔진이 없으므로 이
+    값들만 `Quote`(이미 계산된 정본)에서 가져와 덮어써 그린다(`_value_overrides`) — 그 외
+    모든 셀은 워크북 값을 그대로 사용.
+  - APPROVED 견적서의 직인은 엑셀과 같은 위치 계산식(대표자 셀 `L4` 기준 `SEAL_MM`/
+    `SEAL_OFFSET_X_MM`)으로 별도 그린다 — openpyxl 이 셀 그리드에 심어 둔 이미지 앵커를
+    파싱하는 대신 같은 계산식을 재사용하는 편이 더 견고해서.
+  - 한글 폰트는 여전히 `NanumGothic`(임베드) 로 대체된다 — 템플릿이 쓰는 "맑은 고딕"/"Noto
+    Sans CJK SC" 파일은 이 저장소에 없다. 그래서 글자폭이 미세하게 달라 줄바꿈 위치 등이
+    엑셀과 살짝 다를 수 있다(그 외 위치·구조·서식은 동일) — 이 트레이드오프는 사용자와
+    협의된 것(그리드 렌더링 vs 실제 파일 변환/외부 API, DECISIONS.md 참고).
+  - **알려진 한계**: 항목이 `QUOTE_TEMPLATE_ITEM_ROWS`(18) 을 초과해 `_extend_item_rows`
+    가 `ws.insert_rows` 로 행을 늘리는 경로에서, openpyxl 의 병합 셀 처리 한계(삽입 시 기존
+    병합 범위가 제대로 밀리지 않고 겹치는 경우가 있음 — openpyxl 자체가 알려진 제약사항)로
+    새로 늘어난 항목 행의 세액이 비어 보이는 렌더링 버그가 있다. 엑셀 파일 자체의 병합
+    데이터 문제라 PDF 만의 문제는 아니며, 이번 작업 범위 밖이라 별도로 다룬다
+    (`tests/unit/test_export_pdf.py` 상단 주석에 기록).
+- **reportlab**(`pdfgen.canvas`, `platypus.Paragraph` 로 셀 텍스트만) 로 직접 그린다 — HTML/CSS
+  중간 표현 없음. 이전 구현(WeasyPrint, HTML→PDF)은 시스템 라이브러리(`libpango` 등)가 필요해
+  Vercel Serverless 같은 서버리스 환경에서 동작하지 않아 reportlab(순수 파이썬)으로 교체
+  (DECISIONS.md 참조) — 이번 재작성도 이 제약(네이티브 라이브러리 의존 없음)을 그대로 지킨다.
 - A4, 한글 폰트: **`app/assets/fonts/NanumGothic-{Regular,Bold}.ttf` 를 PDF 안에 직접 임베드**
   (`pdfmetrics.registerFont(TTFont(...))`) — 실행 환경(OS)에 한글 폰트가 설치돼 있는지와 무관하게
   항상 동일하게 렌더링된다. 시스템 라이브러리·시스템 폰트 의존성 전부 없음.

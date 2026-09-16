@@ -46,7 +46,7 @@ from .numbering import format_mgmt_no_display
 _WON = '#,##0"원"'
 _DATE_FMT = "%Y.%m.%d"
 
-_ITEM_FIRST_ROW = 16          # 템플릿 항목 표 첫 데이터 행
+ITEM_FIRST_ROW = 16           # 템플릿 항목 표 첫 데이터 행 — export_pdf.py 도 재사용(공개)
 _SUM_ROW_OFFSET = 34 - 16     # 합계 블록(공급가액 행)이 항목 표 첫 행에서 몇 줄 아래인지
 _ITEM_MERGES = ((2, 4), (7, 8), (9, 10), (11, 12), (13, 14))  # B:D, G:H, I:J, K:L, M:N
 
@@ -107,7 +107,7 @@ def _extend_item_rows(ws, extra: int) -> int:
     마지막 항목 행(33행)의 서식(폰트·테두리·채움·병합·행높이·세액 수식)을 복제한다.
     반환값: 늘어난 뒤의 마지막 항목 행 번호.
     """
-    insert_at = _ITEM_FIRST_ROW + QUOTE_TEMPLATE_ITEM_ROWS  # 34 — 합계 블록 시작 행
+    insert_at = ITEM_FIRST_ROW + QUOTE_TEMPLATE_ITEM_ROWS  # 34 — 합계 블록 시작 행
     template_row = insert_at - 1  # 33 — 서식 복제 원본
     ws.insert_rows(insert_at, extra)
     for offset in range(extra):
@@ -124,7 +124,11 @@ def _extend_item_rows(ws, extra: int) -> int:
     return template_row + extra
 
 
-def build_quote_xlsx(q: Quote) -> bytes:
+def build_quote_workbook(q: Quote) -> tuple[Workbook, int]:
+    """엑셀 워크북을 만들되 아직 바이트로 저장하지 않는다 — `export_pdf.py` 가 같은
+    워크북(같은 템플릿·같은 값 채우기 로직)을 셀 그리드째로 읽어 PDF 로 렌더링할 때
+    재사용한다(단일 소스 오브 트루스, tech/09-export.md). 반환값 2번째 항목은 항목
+    표의 마지막 행 번호(합계 블록 시작 위치 계산용)."""
     wb = load_workbook(QUOTE_TEMPLATE_PATH)
     ws = wb[QUOTE_TEMPLATE_SHEET]
     ws.title = "견적서"
@@ -170,10 +174,10 @@ def build_quote_xlsx(q: Quote) -> bytes:
     # ---- 항목 표: I(공급가액)만 채우면 K(세액)·I34~I36(합계 블록)·K13 이 템플릿
     #      수식으로 자동 재계산된다. 18행을 넘는 경우에만 직접 계산해 채운다 --------
     overflow = len(q.items) - QUOTE_TEMPLATE_ITEM_ROWS
-    last_item_row = _extend_item_rows(ws, overflow) if overflow > 0 else _ITEM_FIRST_ROW + QUOTE_TEMPLATE_ITEM_ROWS - 1
+    last_item_row = _extend_item_rows(ws, overflow) if overflow > 0 else ITEM_FIRST_ROW + QUOTE_TEMPLATE_ITEM_ROWS - 1
 
     for idx, it in enumerate(q.items):
-        row = _ITEM_FIRST_ROW + idx
+        row = ITEM_FIRST_ROW + idx
         ws.cell(row=row, column=2, value=it.name)  # B
         ws.cell(row=row, column=5, value=_fmt_date(it.period_start))  # E
         ws.cell(row=row, column=6, value="~" if (it.period_start or it.period_end) else "")  # F
@@ -184,7 +188,7 @@ def build_quote_xlsx(q: Quote) -> bytes:
     # 적으면 남은 행에 예시 문구가 그대로 남는다 — 명시적으로 비운다.
     # (`ws.cell(value=None)`은 openpyxl 에서 "값을 안 준 것"과 구분이 안 돼 no-op —
     # 반드시 `.value = None` 속성 대입으로 지워야 한다.)
-    for row in range(_ITEM_FIRST_ROW + len(q.items), last_item_row + 1):
+    for row in range(ITEM_FIRST_ROW + len(q.items), last_item_row + 1):
         for col in (2, 5, 6, 7, 9):
             ws.cell(row=row, column=col).value = None
 
@@ -197,6 +201,11 @@ def build_quote_xlsx(q: Quote) -> bytes:
         ws.cell(row=sum_row + 2, column=9, value=q.total_with_vat).number_format = _WON
         ws["K13"] = f"(₩{q.total_with_vat:,})"
 
+    return wb, last_item_row
+
+
+def build_quote_xlsx(q: Quote) -> bytes:
+    wb, _ = build_quote_workbook(q)
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
