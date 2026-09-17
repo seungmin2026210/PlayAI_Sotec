@@ -1,7 +1,22 @@
 """개별 견적서 PDF — reportlab(순수 파이썬, 네이티브 시스템 라이브러리 의존 없음). TECH 09.
 
-레이아웃은 엑셀(`export_excel.build_quote_xlsx`)과 동일한 실제 견적서.jpg 양식.
-APPROVED 견적서는 대표자명 옆에 직인을 합성한다.
+**엑셀과 같은 워크북을 셀 그리드째로 그대로 그린다** — `export_excel.build_quote_workbook(q)`
+로 얻은, 실제 위탁계약형 템플릿(`quote_template_consignment.xlsx`)에 값이 채워진 openpyxl
+워크시트를 정본으로 삼아 열 너비·행 높이·병합·테두리·배경색·정렬·굵기까지 좌표 계산해서
+그대로 재현한다(엑셀 파일을 별도 프로그램으로 변환하는 게 아니라, 같은 셀 데이터를 reportlab
+캔버스에 직접 그리는 방식 — 네이티브 라이브러리 의존 없이 Vercel Serverless 에서도 동작).
+따라서 엑셀 서식이 바뀌면(템플릿 파일 교체) PDF 도 그대로 따라간다 — 별도로 맞출 것이 없다.
+
+엑셀은 공급가액/세액/합계·항목별 세액을 시트 수식(`=ROUND(...)`, `=ROUNDDOWN(...)`)으로 남겨
+Excel 이 열 때 재계산하지만, PDF 는 수식 엔진이 없으므로 이 값들만 `Quote`(이미 계산된 정본,
+`services/calculation.py`)에서 가져와 덮어써 그린다(`_value_overrides`) — 그 외 모든 셀은
+워크북에 있는 값(라벨 문구·인사말·대금결제조건 등, 위탁계약형 전면대체 이후 굵게 처리한
+rich-text 포함)을 그대로 사용한다.
+
+APPROVED 견적서의 직인은 엑셀과 같은 위치 계산(`config.SEAL_MM`/`SEAL_OFFSET_X_MM`, 대표자
+셀 L4 기준)으로 별도 그린다 — openpyxl 이 이미 셀 그리드에 심어 둔 이미지 앵커를 그대로
+읽지 않고 같은 상수로 재계산하는 이유는, openpyxl 의 앵커 내부 구조(OneCellAnchor/EMU)를
+파싱하는 것보다 엑셀과 동일한 계산식을 그대로 재사용하는 편이 더 견고하기 때문.
 
 이전 구현(WeasyPrint, HTML→PDF)은 시스템 라이브러리(libpango 등)가 필요해 Vercel
 Serverless 같은 환경에서 동작하지 않는다(DECISIONS.md 참조). reportlab 은 순수
@@ -13,31 +28,23 @@ from __future__ import annotations
 from io import BytesIO
 
 from ..config import (
-    COMPANY,
     FONT_BOLD_PATH,
     FONT_REGULAR_PATH,
-    GROUPS,
-    QUOTE_AUTHOR_ROLE,
-    QUOTE_AUTHOR_TEAM,
-    QUOTE_CONDITION_LINES,
-    QUOTE_GREETING,
-    QUOTE_GREETING_LINES,
-    QUOTE_SIGNOFF_COLS,
-    QUOTE_VALIDITY_NOTE,
     SEAL_MM,
+    SEAL_OFFSET_X_MM,
     SEAL_PATH,
-    LOGO_PATH,
     STATUS_APPROVED,
     VAT_RATE,
 )
 from ..errors import PDF_UNAVAILABLE, AppError
 from ..models import Quote
 from .calculation import format_won
-from .numbering import format_mgmt_no_display
+from .export_excel import ITEM_FIRST_ROW, build_quote_workbook
 
 _FONT = "NanumGothic"
 _FONT_BOLD = "NanumGothic-Bold"
-_PAGE_MARGIN_MM = 14
+_MM = 72 / 25.4  # pt per mm
+_CELL_PAD = 3.0  # 셀 안쪽 여백(pt, 미확대 기준)
 _fonts_registered = False
 
 
@@ -54,269 +61,327 @@ def _register_fonts() -> None:
     _fonts_registered = True
 
 
-def _build_story(q: Quote) -> list:
+def _col_widths_pt(ws) -> dict[int, float]:
+    """엑셀 열 너비(문자 단위) → pt. `width*7+5` 는 Excel 기본 폰트(Calibri 11) 기준
+    문자폭→픽셀 근사식(SheetJS 등에서 널리 쓰는 변환), 96dpi 픽셀을 pt 로 환산(*0.75)."""
+    from openpyxl.utils import get_column_letter  # noqa: PLC0415
+
+    default_w = ws.sheet_format.defaultColWidth or 8.43
+    widths = {}
+    for c in range(ws.min_column, ws.max_column + 1):
+        dim = ws.column_dimensions.get(get_column_letter(c))
+        w_chars = dim.width if dim and dim.width else default_w
+        widths[c] = (w_chars * 7 + 5) * 0.75
+    return widths
+
+
+def _row_heights_pt(ws) -> dict[int, float]:
+    """엑셀 행 높이는 이미 pt 단위(엑셀 내부 단위 자체가 pt)라 변환이 필요 없다."""
+    default_h = ws.sheet_format.defaultRowHeight or 15.0
+    heights = {}
+    for r in range(ws.min_row, ws.max_row + 1):
+        dim = ws.row_dimensions.get(r)
+        heights[r] = dim.height if dim and dim.height else default_h
+    return heights
+
+
+def _cumulative(sizes: dict[int, float], keys: list[int]) -> tuple[dict[int, float], float]:
+    """각 key(행/열 번호) → 콘텐츠 시작지점부터의 누적 거리(pt), 총합."""
+    offsets, acc = {}, 0.0
+    for k in keys:
+        offsets[k] = acc
+        acc += sizes[k]
+    return offsets, acc
+
+
+_BORDER_WIDTH_PT = {
+    "hair": 0.25, "thin": 0.5, "dotted": 0.5, "dashed": 0.5, "dashDot": 0.5,
+    "medium": 1.25, "mediumDashed": 1.25, "double": 1.0, "thick": 2.25,
+}
+
+
+def _border_width(style: str | None) -> float:
+    return _BORDER_WIDTH_PT.get(style, 0.5) if style else 0.0
+
+
+def _rgb_color(color):
+    """openpyxl Color(theme/indexed/rgb) → reportlab Color. 알 수 없는 팔레트 색은
+    검정(테두리 기본값)으로 근사 — 이 템플릿은 대부분 자동/검정 테두리만 쓴다."""
     from reportlab.lib import colors  # noqa: PLC0415
-    from reportlab.lib.enums import TA_CENTER, TA_RIGHT  # noqa: PLC0415
-    from reportlab.lib.styles import ParagraphStyle  # noqa: PLC0415
-    from reportlab.lib.units import mm  # noqa: PLC0415
-    from reportlab.platypus import Image, Paragraph, Spacer, Table, TableStyle  # noqa: PLC0415
 
-    normal = ParagraphStyle("normal", fontName=_FONT, fontSize=9, leading=12)
-    bold = ParagraphStyle("bold", fontName=_FONT_BOLD, fontSize=9, leading=12)
-    title = ParagraphStyle(
-        "title", fontName=_FONT_BOLD, fontSize=22, leading=26, alignment=TA_CENTER
-    )
-    greeting_bold = ParagraphStyle("greeting_bold", fontName=_FONT_BOLD, fontSize=10, leading=14)
-    total_label = ParagraphStyle("total_label", fontName=_FONT_BOLD, fontSize=11, leading=15)
-    total_value = ParagraphStyle(
-        "total_value", fontName=_FONT_BOLD, fontSize=13, leading=17, alignment=TA_RIGHT
-    )
-    foot_note = ParagraphStyle(
-        "foot_note", fontName=_FONT, fontSize=8, leading=11, textColor=colors.HexColor("#666666")
-    )
-    sum_label = ParagraphStyle("sum_label", fontName=_FONT, fontSize=9, alignment=TA_RIGHT)
-    sum_value = ParagraphStyle("sum_value", fontName=_FONT, fontSize=9, alignment=TA_RIGHT)
-    sum_value_bold = ParagraphStyle(
-        "sum_value_bold", fontName=_FONT_BOLD, fontSize=10, alignment=TA_RIGHT
-    )
+    if color is not None and getattr(color, "type", None) == "rgb" and color.rgb and len(color.rgb) == 8:
+        try:
+            return colors.HexColor("#" + color.rgb[-6:])
+        except ValueError:
+            pass
+    return colors.black
 
-    def kv_table(rows: list[tuple[str, object]], col_widths=(28 * mm, None)) -> Table:
-        """label(볼드, 배경) | value 2열 kv 표. value 가 이미 flowable이면 그대로 쓴다."""
-        data = []
-        for label, value in rows:
-            v = value if hasattr(value, "wrap") else Paragraph(str(value), normal)
-            data.append([Paragraph(label, bold), v])
-        t = Table(data, colWidths=list(col_widths))
-        t.setStyle(
-            TableStyle(
-                [
-                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
-                    ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f4f4f4")),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 5),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-                    ("TOPPADDING", (0, 0), (-1, -1), 2),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-                ]
-            )
-        )
-        return t
 
-    story: list = []
+def _fill_color(cell):
+    from reportlab.lib import colors  # noqa: PLC0415
 
-    if LOGO_PATH.exists():
-        story.append(Image(str(LOGO_PATH), width=28 * mm, height=12 * mm))
-        story.append(Spacer(1, 4))
-    story.append(Paragraph("견 적 서", title))
-    story.append(Spacer(1, 10))
+    fill = cell.fill
+    if fill is None or fill.patternType != "solid":
+        return None
+    fg = fill.fgColor
+    if fg is not None and getattr(fg, "type", None) == "rgb" and fg.rgb and len(fg.rgb) == 8:
+        try:
+            c = colors.HexColor("#" + fg.rgb[-6:])
+            if c == colors.white:  # 흰 배경은 그릴 필요 없음(기본 배경과 동일)
+                return None
+            return c
+        except ValueError:
+            return None
+    return None
 
-    # ---- 좌: 견적 기본정보 + 수신처 / 우: 공급자 ---------------------------
-    left = [
-        kv_table(
-            [
-                ("견적일자", q.issue_date.isoformat()),
-                ("견적유효기간", QUOTE_VALIDITY_NOTE),
-                ("견적 NO", format_mgmt_no_display(q.seq_year, q.group_code, q.seq_no)),
-            ]
-        ),
-        Spacer(1, 6),
-        Paragraph("[ 수신처 (고객사) ]", bold),
-        Spacer(1, 2),
-        kv_table(
-            [
-                ("고객사명", q.customer_name),
-                (
-                    "담당자",
-                    f"{q.customer_contact_name or '-'} {q.customer_contact_phone or ''}".strip(),
-                ),
-                ("C.C", ""),
-            ]
-        ),
-    ]
 
-    ceo_value = f"{COMPANY['ceo_name']} (인)"
-    ceo_cell = Paragraph(ceo_value, normal)
-    if q.status == STATUS_APPROVED and SEAL_PATH.exists():
-        ceo_row = Table(
-            [[ceo_cell, Image(str(SEAL_PATH), width=SEAL_MM * mm, height=SEAL_MM * mm)]],
-            colWidths=[None, SEAL_MM * mm + 2],
-        )
-        ceo_row.setStyle(
-            TableStyle(
-                [
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                    ("TOPPADDING", (0, 0), (-1, -1), 0),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-                ]
-            )
-        )
-        ceo_value_flowable = ceo_row
+def _edge_border(ws, r1: int, c1: int, r2: int, c2: int, side: str):
+    """병합 영역의 한 변(top/bottom/left/right) 테두리 — 실제로 테두리가 그 변의 어느
+    셀에 저장돼 있는지 몰라도 되게, 변을 이루는 모든 셀을 훑어 처음 발견한 스타일을 쓴다."""
+    if side == "top":
+        cells = [(r1, cc) for cc in range(c1, c2 + 1)]
+        attr = "top"
+    elif side == "bottom":
+        cells = [(r2, cc) for cc in range(c1, c2 + 1)]
+        attr = "bottom"
+    elif side == "left":
+        cells = [(rr, c1) for rr in range(r1, r2 + 1)]
+        attr = "left"
     else:
-        ceo_value_flowable = ceo_cell
+        cells = [(rr, c2) for rr in range(r1, r2 + 1)]
+        attr = "right"
+    for rr, cc in cells:
+        side_obj = getattr(ws.cell(row=rr, column=cc).border, attr)
+        if side_obj is not None and side_obj.style:
+            return side_obj
+    return None
 
-    right = [
-        Paragraph("[ 공급자 (자사) ]", bold),
-        Spacer(1, 2),
-        kv_table(
-            [
-                ("등록번호", COMPANY["biz_no"]),
-                ("상호", COMPANY["name"]),
-                ("대표자", ceo_value_flowable),
-                ("주소", COMPANY.get("address", "")),
-                ("업태 / 종목", f"{COMPANY.get('biz_type', '')} / {COMPANY.get('biz_item', '')}"),
-                ("전화 / FAX", f"{COMPANY.get('tel', '')} / {COMPANY.get('fax', '')}"),
-                (
-                    "견적 작성자",
-                    f"{QUOTE_AUTHOR_TEAM} {GROUPS.get(q.group_code, '')} / {QUOTE_AUTHOR_ROLE}",
-                ),
-            ]
-        ),
-    ]
 
-    head = Table([[left, right]], colWidths=["48%", "52%"])
-    head.setStyle(
-        TableStyle(
-            [
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING", (1, 0), (1, 0), 0),
-                ("RIGHTPADDING", (0, 0), (0, 0), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-            ]
-        )
+def _xml_escape(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _cell_markup(ws, r: int, c: int, override) -> str | None:
+    """셀 값을 reportlab Paragraph 마크업 문자열로. rich-text(부분 굵게)·전체굵게·
+    개행(`\\n`, 세로 라벨용)을 반영한다. 미해결 수식(override 없는 `=...`)은 빈 문자열."""
+    from openpyxl.cell.rich_text import CellRichText, TextBlock  # noqa: PLC0415
+
+    key = (r, c)
+    if key in override:
+        value = override[key]
+    else:
+        value = ws.cell(row=r, column=c).value
+
+    if value is None or value == "":
+        return None
+    if isinstance(value, str) and value.startswith("="):
+        return None  # 미해결 수식 — override 에 없으면 빈칸(원본 캡처 실패 대비 안전값)
+
+    if isinstance(value, CellRichText):
+        parts = []
+        for part in value:
+            if isinstance(part, TextBlock):
+                text = _xml_escape(part.text).replace("\n", "<br/>")
+                parts.append(f"<b>{text}</b>" if part.font and part.font.b else text)
+            else:
+                parts.append(_xml_escape(str(part)).replace("\n", "<br/>"))
+        return "".join(parts)
+
+    if isinstance(value, (int, float)):
+        cell = ws.cell(row=r, column=c)
+        text = format_won(int(value)) if '"원"' in (cell.number_format or "") else f"{value:,}"
+    else:
+        text = _xml_escape(str(value)).replace("\n", "<br/>")
+
+    if ws.cell(row=r, column=c).font.bold:
+        return f"<b>{text}</b>"
+    return text
+
+
+def _paragraph_style(cell, scale: float):
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT  # noqa: PLC0415
+    from reportlab.lib.styles import ParagraphStyle  # noqa: PLC0415
+
+    size = (cell.font.size or 10.0) * scale
+    is_numeric = isinstance(cell.value, (int, float))
+    h_align = cell.alignment.horizontal or ("right" if is_numeric else "left")
+    alignment = {"left": TA_LEFT, "center": TA_CENTER, "right": TA_RIGHT, "justify": TA_LEFT}.get(h_align, TA_LEFT)
+    return ParagraphStyle(
+        f"c{id(cell)}", fontName=_FONT, fontSize=size, leading=size * 1.25, alignment=alignment,
     )
-    story.append(head)
-    story.append(Spacer(1, 12))
 
-    # ---- 인사말 -----------------------------------------------------------
-    story.append(Paragraph(QUOTE_GREETING, greeting_bold))
-    for line in QUOTE_GREETING_LINES:
-        story.append(Paragraph(line, normal))
-    story.append(Spacer(1, 10))
 
-    # ---- 합계금액 요약 -----------------------------------------------------
-    total_box = Table(
-        [[Paragraph("합계금액 (공급가액 + 세액)", total_label), Paragraph(format_won(q.total_with_vat), total_value)]],
-        colWidths=["60%", "40%"],
-    )
-    total_box.setStyle(
-        TableStyle(
-            [
-                ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#333333")),
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f7f7f7")),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-            ]
-        )
-    )
-    story.append(total_box)
-    story.append(Spacer(1, 10))
+def _wrap_paragraph(markup: str, cell, scale: float, avail_pt: float):
+    """단순 폭 안에 텍스트를 배치. 원본 셀이 `wrap_text` 를 켜지 않은 한(이 템플릿엔
+    G3 세로라벨 1곳뿐) 여러 줄로 줄바꿈하지 않고, 좁은 열(날짜 등)은 한 줄에 들어갈
+    때까지 글자 크기를 줄인다(Excel "셀에 맞춤" 과 동일한 의도) — 그렇지 않으면
+    "2026.06.01" 같은 한 덩어리 텍스트가 reportlab 기본 줄바꿈으로 중간에서 잘린다."""
+    from reportlab.platypus import Paragraph  # noqa: PLC0415
 
-    # ---- 용역(계약) --------------------------------------------------------
-    story.append(kv_table([("용역(계약)명", q.title), ("용역(계약) 기간", "")]))
-    story.append(Spacer(1, 10))
+    style = _paragraph_style(cell, scale)
+    if cell.alignment.wrap_text:
+        p = Paragraph(markup, style)
+        w, h = p.wrap(avail_pt, 10_000)
+        return p, w, h
 
-    # ---- 항목 표 ------------------------------------------------------------
-    header_style = ParagraphStyle("items_head", fontName=_FONT_BOLD, fontSize=9, alignment=TA_CENTER)
-    headers = ["No", "품목", "규격", "수량", "단가", "공급가액", "세액", "비고"]
-    rows = [[Paragraph(h, header_style) for h in headers]]
-    for it in q.items:
-        line_vat = round(it.line_amount * VAT_RATE)
-        rows.append(
-            [
-                Paragraph(str(it.line_no), ParagraphStyle("c", fontName=_FONT, fontSize=9, alignment=TA_CENTER)),
-                Paragraph(it.name, normal),
-                "",
-                Paragraph(f"{it.qty:,}", ParagraphStyle("r", fontName=_FONT, fontSize=9, alignment=TA_RIGHT)),
-                Paragraph(format_won(it.unit_price), ParagraphStyle("r2", fontName=_FONT, fontSize=9, alignment=TA_RIGHT)),
-                Paragraph(format_won(it.line_amount), ParagraphStyle("r3", fontName=_FONT, fontSize=9, alignment=TA_RIGHT)),
-                Paragraph(format_won(line_vat), ParagraphStyle("r4", fontName=_FONT, fontSize=9, alignment=TA_RIGHT)),
-                "",
-            ]
-        )
-    items_table = Table(
-        rows, colWidths=[10 * mm, None, 16 * mm, 14 * mm, 22 * mm, 24 * mm, 20 * mm, 16 * mm]
-    )
-    items_table.setStyle(
-        TableStyle(
-            [
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#999999")),
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eeeeee")),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 4),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-                ("TOPPADDING", (0, 0), (-1, -1), 3),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-            ]
-        )
-    )
-    story.append(items_table)
-    story.append(Spacer(1, 6))
+    p = Paragraph(markup, style)
+    w, h = p.wrap(avail_pt, 10_000)
+    while h > style.leading * 1.05 and style.fontSize > 4:
+        style.fontSize -= 0.5
+        style.leading = style.fontSize * 1.25
+        p = Paragraph(markup, style)
+        w, h = p.wrap(avail_pt, 10_000)
+    return p, w, h
 
-    # ---- 합계 블록 -----------------------------------------------------------
-    sum_rows = [
-        [Paragraph("공급가액 합계 (십만단위 절사)", sum_label), Paragraph(format_won(q.supply_amount), sum_value)],
-        [Paragraph("세액 (10%)", sum_label), Paragraph(format_won(q.vat_amount), sum_value)],
-        [Paragraph("합계금액", ParagraphStyle("sl2", fontName=_FONT_BOLD, fontSize=10, alignment=TA_RIGHT)), Paragraph(format_won(q.total_with_vat), sum_value_bold)],
-    ]
-    sum_table = Table(sum_rows, colWidths=[None, 40 * mm], hAlign="RIGHT")
-    sum_table.setStyle(
-        TableStyle(
-            [
-                ("LINEBELOW", (0, 0), (-1, 1), 0.5, colors.HexColor("#dddddd")),
-                ("LINEABOVE", (0, 2), (-1, 2), 1, colors.HexColor("#333333")),
-                ("TOPPADDING", (0, 0), (-1, -1), 3),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-            ]
-        )
-    )
-    story.append(sum_table)
 
-    vat_note = (
-        "부가세 포함 견적입니다. 고객 실지불액은 '합계금액' 기준입니다."
-        if q.vat_included
-        else "부가세 미포함(별도) 견적입니다. 공급가액 기준이며 부가세는 별도입니다."
-    )
-    story.append(
-        Paragraph(f"* 항목 합계 {q.items_raw_total:,}원 · 합계는 총액 기준 십만단위 절사. {vat_note}", foot_note)
-    )
-    story.append(Spacer(1, 10))
+def _value_overrides(q: Quote, last_item_row: int) -> dict[tuple[int, int], str]:
+    """엑셀이 수식으로 남겨 두는 셀(항목별 세액 K열, 합계블록 I열, K13)만 `Quote`
+    에 이미 계산된 정본 값으로 덮어쓴다 — PDF 는 수식을 계산할 수 없어서 필요."""
+    overrides: dict[tuple[int, int], str] = {}
+    for idx, it in enumerate(q.items):
+        row = ITEM_FIRST_ROW + idx
+        overrides[(row, 11)] = format_won(round(it.line_amount * VAT_RATE))  # K = 11
+    for row in range(ITEM_FIRST_ROW + len(q.items), last_item_row + 1):
+        overrides[(row, 11)] = ""  # 남는 템플릿 항목 행의 세액 수식 — 항목 없으니 공란
+    sum_row = last_item_row + 1
+    overrides[(sum_row, 9)] = format_won(q.supply_amount)      # I: 공급가액
+    overrides[(sum_row + 1, 9)] = format_won(q.vat_amount)     # I: 세액
+    overrides[(sum_row + 2, 9)] = format_won(q.total_with_vat)  # I: 합계
+    overrides[(13, 11)] = f"(₩{q.total_with_vat:,})"            # K13
+    return overrides
 
-    # ---- 대금결제조건 / 납품조건 / WORK SCOPE / 납기 --------------------------
-    # 위탁계약형 전면대체(DECISIONS.md) 이후 문구 — PDF 레이아웃 자체는 아직 SW형
-    # 그대로라 셀 단위로는 엑셀과 다르다(엑셀 확정 후 별도 작업, tech/09-export.md).
-    for line in QUOTE_CONDITION_LINES:
-        story.append(Paragraph(line, normal))
-    story.append(Spacer(1, 14))
 
-    # ---- 서명란 ---------------------------------------------------------------
-    signoff_head = [Paragraph(c, header_style) for c in QUOTE_SIGNOFF_COLS]
-    signoff = Table([signoff_head, ["", "", ""]], colWidths=[25 * mm] * len(QUOTE_SIGNOFF_COLS), rowHeights=[8 * mm, 16 * mm], hAlign="RIGHT")
-    signoff.setStyle(
-        TableStyle(
-            [
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#999999")),
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eeeeee")),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ]
-        )
-    )
-    story.append(signoff)
-    return story
+def _draw_seal(cvs, q: Quote, col_x: dict[int, float], row_y: dict[int, float], row_h: dict[int, float], scale: float, oy_top: float, ox: float) -> None:
+    from openpyxl.utils import column_index_from_string  # noqa: PLC0415
+
+    if q.status != STATUS_APPROVED or not SEAL_PATH.exists():
+        return
+    seal_pt = SEAL_MM * _MM
+    offset_pt = SEAL_OFFSET_X_MM * _MM
+    col = column_index_from_string("L")
+    row = 4
+    x1 = col_x[col] + offset_pt
+    y1 = row_y[row] + max((row_h[row] - seal_pt) / 2, 0)
+    cx = ox + x1 * scale
+    cy = oy_top - (y1 + seal_pt) * scale
+    size = seal_pt * scale
+    cvs.drawImage(str(SEAL_PATH), cx, cy, width=size, height=size, mask="auto")
+
+
+def _render_workbook_pdf(q: Quote) -> bytes:
+    from reportlab.lib.pagesizes import A4  # noqa: PLC0415
+    from reportlab.pdfgen import canvas as canvas_mod  # noqa: PLC0415
+
+    wb, last_item_row = build_quote_workbook(q)
+    ws = wb.active
+    overrides = _value_overrides(q, last_item_row)
+
+    col_w = _col_widths_pt(ws)
+    row_h = _row_heights_pt(ws)
+    cols = list(range(ws.min_column, ws.max_column + 1))
+    rows = list(range(ws.min_row, ws.max_row + 1))
+    col_x, content_w = _cumulative(col_w, cols)
+    row_y, content_h = _cumulative(row_h, rows)
+
+    pm = ws.page_margins
+    margin_l = (pm.left or 0.3) * 72
+    margin_r = (pm.right or 0.3) * 72
+    margin_t = (pm.top or 0.4) * 72
+    margin_b = (pm.bottom or 0.4) * 72
+
+    page_w, page_h = A4
+    avail_w = page_w - margin_l - margin_r
+    avail_h = page_h - margin_t - margin_b
+    scale = min(avail_w / content_w, avail_h / content_h, 1.0) if content_w and content_h else 1.0
+
+    ox = margin_l
+    oy_top = page_h - margin_t
+
+    def cx(lx: float) -> float:
+        return ox + lx * scale
+
+    def cy(ly: float) -> float:
+        return oy_top - ly * scale
+
+    buf = BytesIO()
+    cvs = canvas_mod.Canvas(buf, pagesize=A4)
+    cvs.setTitle(f"견적서 {q.mgmt_no}")
+
+    # ---- 병합 영역 인덱스 -----------------------------------------------------
+    merge_anchor: dict[tuple[int, int], tuple[int, int, int, int]] = {}
+    covered: set[tuple[int, int]] = set()
+    for rng in ws.merged_cells.ranges:
+        r1, c1, r2, c2 = rng.min_row, rng.min_col, rng.max_row, rng.max_col
+        merge_anchor[(r1, c1)] = (r1, c1, r2, c2)
+        for rr in range(r1, r2 + 1):
+            for cc in range(c1, c2 + 1):
+                if (rr, cc) != (r1, c1):
+                    covered.add((rr, cc))
+
+    for r in rows:
+        for c in cols:
+            if (r, c) in covered:
+                continue
+            r1, c1, r2, c2 = merge_anchor.get((r, c), (r, c, r, c))
+            x1, y1 = col_x[c1], row_y[r1]
+            w = sum(col_w[cc] for cc in range(c1, c2 + 1))
+            h = sum(row_h[rr] for rr in range(r1, r2 + 1))
+
+            anchor_cell = ws.cell(row=r1, column=c1)
+
+            # 배경색
+            fill = _fill_color(anchor_cell)
+            if fill is not None:
+                cvs.setFillColor(fill)
+                cvs.rect(cx(x1), cy(y1 + h), w * scale, h * scale, stroke=0, fill=1)
+
+            # 테두리(변마다 실제 스타일이 저장된 셀을 찾아서)
+            for side, (sx1, sy1, sx2, sy2) in (
+                ("top", (x1, y1, x1 + w, y1)),
+                ("bottom", (x1, y1 + h, x1 + w, y1 + h)),
+                ("left", (x1, y1, x1, y1 + h)),
+                ("right", (x1 + w, y1, x1 + w, y1 + h)),
+            ):
+                b = _edge_border(ws, r1, c1, r2, c2, side)
+                if b is None:
+                    continue
+                width = _border_width(b.style)
+                if width <= 0:
+                    continue
+                cvs.setLineWidth(width * scale)
+                cvs.setStrokeColor(_rgb_color(b.color))
+                cvs.line(cx(sx1), cy(sy1), cx(sx2), cy(sy2))
+
+            # 텍스트
+            markup = _cell_markup(ws, r1, c1, overrides)
+            if markup:
+                avail_pt = max(w - 2 * _CELL_PAD, 4) * scale
+                p, pw, ph = _wrap_paragraph(markup, anchor_cell, scale, avail_pt)
+                v_align = anchor_cell.alignment.vertical or "center"
+                if v_align == "top":
+                    text_bottom_content = y1 + _CELL_PAD + ph / scale
+                elif v_align == "bottom":
+                    text_bottom_content = y1 + h - _CELL_PAD
+                else:
+                    text_bottom_content = y1 + (h + ph / scale) / 2
+                h_align = anchor_cell.alignment.horizontal or ("right" if isinstance(anchor_cell.value, (int, float)) else "left")
+                if h_align == "center":
+                    text_x = x1 + (w - pw / scale) / 2
+                elif h_align == "right":
+                    text_x = x1 + w - _CELL_PAD - pw / scale
+                else:
+                    text_x = x1 + _CELL_PAD
+                p.drawOn(cvs, cx(text_x), cy(text_bottom_content))
+
+    _draw_seal(cvs, q, col_x, row_y, row_h, scale, oy_top, ox)
+
+    cvs.showPage()
+    cvs.save()
+    return buf.getvalue()
 
 
 def build_quote_pdf(q: Quote) -> bytes:
     try:
-        from reportlab.lib.pagesizes import A4  # noqa: PLC0415
-        from reportlab.lib.units import mm  # noqa: PLC0415
-        from reportlab.platypus import SimpleDocTemplate  # noqa: PLC0415
-
         _register_fonts()
     except Exception as exc:  # pragma: no cover - 환경 의존(폰트 파일 누락 등)
         raise AppError(
@@ -326,18 +391,7 @@ def build_quote_pdf(q: Quote) -> bytes:
         ) from exc
 
     try:
-        buf = BytesIO()
-        doc = SimpleDocTemplate(
-            buf,
-            pagesize=A4,
-            leftMargin=_PAGE_MARGIN_MM * mm,
-            rightMargin=_PAGE_MARGIN_MM * mm,
-            topMargin=_PAGE_MARGIN_MM * mm,
-            bottomMargin=_PAGE_MARGIN_MM * mm,
-            title=f"견적서 {q.mgmt_no}",
-        )
-        doc.build(_build_story(q))
-        return buf.getvalue()
+        return _render_workbook_pdf(q)
     except Exception as exc:  # pragma: no cover
         raise AppError(
             PDF_UNAVAILABLE, 501, "PDF 생성 중 오류가 발생했습니다. 엑셀 export 를 이용하세요."
