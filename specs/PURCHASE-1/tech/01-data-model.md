@@ -1,6 +1,9 @@
 # 1. Firestore 데이터 모델 (구매관리 · 자산관리)
 
-배경: [`../DECISIONS.md`](../DECISIONS.md). 컨벤션은 QUOTE-1과 동일하게 맞춤(`specs/QUOTE-1/tech/12-firestore-migration.md`) — 의미 있는 문서 ID를 우선 쓰고, 날짜는 Timestamp 대신 `YYYY-MM-DD` 문자열, soft delete는 상태값으로 표현.
+배경: [`../DECISIONS.md`](../DECISIONS.md), [`../TECH.md`](../TECH.md). 컨벤션은 QUOTE-1과 동일하게 맞춤(`specs/QUOTE-1/tech/12-firestore-migration.md`) — 의미 있는 문서 ID를 우선 쓰고, 날짜는 Timestamp 대신 `YYYY-MM-DD` 문자열, soft delete는 상태값으로 표현.
+
+> `asset_units`/`asset_product_seq`/`asset_products`(§1-3, §5)는 **구현 완료**(`backend/app/`,
+> `TECH.md` 참고). `asset_assignments`(§4, §6-7)는 아직 자산관리 팀원 구현 전 설계 스케치다.
 
 `db/schema.sql`의 PostgreSQL 버전(`asset_products`/`asset_units`/`asset_assignments`/트리거)은 이 설계의 로컬 검증용 프로토타입이다 — 실제 구현은 아래 컬렉션 구조와 트랜잭션 로직을 따른다.
 
@@ -48,7 +51,7 @@
   "status": "AVAILABLE",           // "AVAILABLE" | "ASSIGNED" | "EXPIRED" — 트랜잭션으로만 갱신(§5)
 
   "source_quote_id": null,         // 견적에서 연동된 경우 quotes 문서 ID
-  "group_id": "group-dev",
+  "group_code": "A",              // config.GROUPS 참조(quotes와 동일 컨벤션, 별도 groups 컬렉션 없음)
 
   "retired_at": null,              // 만료/폐기 처리 시각. 채워져도 문서는 안 지움(번호 영구 보존)
   "created_at": <Timestamp>,
@@ -79,11 +82,18 @@ PostgreSQL 버전은 `nextval()` + `AFTER INSERT` 트리거로 처리했지만, 
 # services/units.py 개념 스케치
 def create_asset_unit(client, *, product_id, purchase_date, purchased_from, price,
                        unit_type=None, key_value=None, expire_date=None,
-                       source_quote_id=None, group_id):
+                       source_quote_id=None, group_code):
     @firestore.transactional
     def txn(transaction):
+        # Firestore 트랜잭션은 모든 read 가 모든 write 보다 먼저 실행돼야 한다 — 견적서를
+        # 먼저 읽어두고, 채번(내부적으로 read-then-write)을 그 다음에 호출한다.
         product_ref = client.collection("asset_products").document(product_id)
         product = product_ref.get(transaction=transaction).to_dict()
+
+        quote_ref, quote = None, None
+        if source_quote_id:
+            quote_ref = client.collection("quotes").document(source_quote_id)
+            quote = quote_ref.get(transaction=transaction).to_dict()
 
         seq_ref = client.collection("asset_product_seq").document(product_id)
         seq_snap = seq_ref.get(transaction=transaction)
@@ -98,15 +108,14 @@ def create_asset_unit(client, *, product_id, purchase_date, purchased_from, pric
             "product_name": product["name"], "asset_category": product["asset_category"],
             "purchase_date": purchase_date, "purchased_from": purchased_from, "price": price,
             "unit_type": unit_type, "key_value": key_value, "expire_date": expire_date,
-            "status": "AVAILABLE", "source_quote_id": source_quote_id, "group_id": group_id,
+            "status": "AVAILABLE", "source_quote_id": source_quote_id, "group_code": group_code,
             "retired_at": None, "created_at": SERVER_TIMESTAMP, "updated_at": SERVER_TIMESTAMP,
         })
 
-        if source_quote_id:
-            quote_ref = client.collection("quotes").document(source_quote_id)
-            quote = quote_ref.get(transaction=transaction).to_dict()
-            if quote and quote.get("locked_at") is None:
-                transaction.update(quote_ref, {"locked_at": SERVER_TIMESTAMP})
+        # 새 필드를 만들지 않고 QUOTE-1의 기존 apply_purchase_lock()을 그대로 재사용한다
+        # (specs/QUOTE-1/DECISIONS.md open-4 실연동, DECISIONS.md "백엔드 구현 완료" 참고).
+        if quote and not quote.get("purchase_locked"):
+            transaction.update(quote_ref, {"purchase_locked": True, "locked_at": SERVER_TIMESTAMP})
 
         return unit_no
 
@@ -165,6 +174,6 @@ def return_unit(client, *, assignment_id):
 
 ## 8. 조회 — 그룹 스코프 · 잔여수량
 
-- **그룹 스코프**: QUOTE-1과 동일하게 `group_id == ...` 등호 필터 + 서버(`deps.py`) 최종 방어선. RLS 없음(Firestore 자체 제약).
+- **그룹 스코프**: QUOTE-1과 동일하게 `group_code == ...` 등호 필터 + 서버(`deps.py`) 최종 방어선. RLS 없음(Firestore 자체 제약).
 - **상품별 잔여수량**: 별도 카운터를 저장하지 않고, `asset_units`에서 `product_id == X AND status == "AVAILABLE"`을 쿼리해서 개수를 센다(QUOTE-1이 `total`을 애플리케이션 레벨 `len()`으로 계산한 것과 동일 이유 — 지금 규모에서는 캐시 필드를 따로 관리하는 비용이 더 큼).
-- 복합 필터(`product_id` + `status`, `group_id` + `status` 등)는 `firestore.indexes.json`에 복합 인덱스 추가 필요 — 실제 쿼리 작성 시점에 에러 메시지 보고 추가(QUOTE-1 때와 동일 절차, tech/12 §9).
+- 복합 필터(`product_id` + `status`, `group_code` + `status` 등)는 `firestore.indexes.json`에 복합 인덱스 추가 필요 — 실제 쿼리 작성 시점에 에러 메시지 보고 추가(QUOTE-1 때와 동일 절차, tech/12 §9).

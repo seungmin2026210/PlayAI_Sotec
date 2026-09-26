@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from ..config import (
+    ASSET_CATEGORY_LABELS,
     COMPANY,
     GROUPS,
     STATUS_LABELS,
@@ -23,4 +24,5 @@ def meta(_=Depends(get_current_user)) -> MetaResponse:
         vat_rate=VAT_RATE,
         truncate_unit=TRUNCATE_UNIT,
         statuses=[{"code": c, "label": l} for c, l in STATUS_LABELS.items()],
+        asset_categories=[{"code": c, "label": l} for c, l in ASSET_CATEGORY_LABELS.items()],
     )

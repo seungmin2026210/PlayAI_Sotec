@@ -28,6 +28,26 @@ QUOTE-1은 PostgreSQL로 먼저 설계하고 나중에 Firestore로 옮겼지만
 
 ## 남은 질문 (구현 중 확정 필요)
 
-1. 상품 마스터 CRUD는 누가 하나(전체관리자만? 그룹관리자도?) — 지금은 구매관리 담당자만 쓸 걸로 가정.
+1. 상품 마스터 CRUD는 누가 하나(전체관리자만? 그룹관리자도?) — 지금은 그룹관리자도 조회는 가능, 등록/수정은 전체관리자만으로 구현.
 2. 일반 사용자(USER) 로그인 화면 도입 시점 — 신청/승인 흐름을 언제 붙일지는 별도 논의.
-3. `asset_products` 문서 ID를 auto-id로 둘지, 사람이 읽기 쉬운 slug로 둘지(`tech/01-data-model.md` §1 참고) — 지금은 auto-id로 잠정 결정(상품명이 바뀔 수 있어서).
+3. ~~`asset_products` 문서 ID~~ — auto-id로 확정, 구현 완료.
+
+## 백엔드 구현 완료 (2026-09) — 계획과 달라진 점
+
+상세: [`TECH.md`](./TECH.md). 코드: `backend/app/{models,schemas,presenter,deps}.py`,
+`services/asset_{numbering,query}.py`, `routers/asset_{products,units}.py`. 테스트:
+`backend/tests/test_purchase.py`(14개, 기존 36개와 합쳐 50개 전부 통과).
+
+- **`group_id`(별도 `groups` 컬렉션) 대신 `group_code`(문자열) 사용.** QUOTE-1이 이미
+  `groups` 컬렉션 없이 `config.GROUPS` 상수 + `group_code` 필드로 그룹을 다루고 있어서,
+  새 컬렉션을 만드는 대신 그 컨벤션을 그대로 따랐다. `tech/01-data-model.md`의 `group_id`
+  표기는 실제로는 `group_code`를 뜻한다(문서 갱신 필요 — TODO).
+- **견적 연동 잠금은 새로 만들지 않고 기존 메커니즘 재사용**: QUOTE-1에 이미
+  `Quote.purchase_locked`/`locked_at` + `apply_purchase_lock()`이 있었다(open-4 "구매관리
+  반영 트리거: 현재 수동 토글. 실제 연동 형태 결정 시 재설계"). 유닛 생성 트랜잭션에서 이
+  함수를 그대로 호출해 실연동했다 — 새 필드 없음.
+- **`retired_numbers` 같은 별도 결번 대장 컬렉션은 만들지 않았다.** `asset_units` 문서 자체에
+  `status=EXPIRED` + `retired_at`을 남기고, 채번 카운터(`asset_product_seq.last_seq`)가
+  되돌아가지 않으므로 번호 재사용은 이미 방지된다. QUOTE-1이 `retired_numbers`를 따로 둔 건
+  결번 자체를 감사 목적으로 조회하기 쉽게 하려는 것인데, 이번엔 그 요구가 아직 없어 생략했다
+  (YAGNI — 필요해지면 `numbering.retire_in()` 패턴을 그대로 가져오면 된다).

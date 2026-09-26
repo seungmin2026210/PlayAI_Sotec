@@ -174,3 +174,28 @@ STATUS_LABELS: dict[str, str] = {
     STATUS_REJECTED: "반려됨",
     STATUS_CANCELLED: "취소됨",
 }
+
+# ---------------------------------------------------------------------------
+# 구매관리 · 자산관리 (PURCHASE-1, specs/PURCHASE-1/)
+# ---------------------------------------------------------------------------
+ASSET_CATEGORY_LABELS: dict[str, str] = {
+    "SW": "소프트웨어",
+    "HW": "하드웨어",
+    "EDU": "교육자산",
+}
+ASSET_CATEGORIES = tuple(ASSET_CATEGORY_LABELS.keys())
+
+ASSET_UNIT_STATUS_AVAILABLE = "AVAILABLE"
+ASSET_UNIT_STATUS_ASSIGNED = "ASSIGNED"
+ASSET_UNIT_STATUS_EXPIRED = "EXPIRED"
+
+ASSET_UNIT_STATUS_LABELS: dict[str, str] = {
+    ASSET_UNIT_STATUS_AVAILABLE: "재고",
+    ASSET_UNIT_STATUS_ASSIGNED: "배정됨",
+    ASSET_UNIT_STATUS_EXPIRED: "만료",
+}
+
+ASSET_UNIT_TYPE_LABELS: dict[str, str] = {
+    "KEY": "키",
+    "ACCOUNT": "계정",
+}

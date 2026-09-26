@@ -18,6 +18,10 @@ def _parse_date(value: Any) -> date:
     return date.fromisoformat(value)
 
 
+def _parse_date_opt(value: Any) -> date | None:
+    return _parse_date(value) if value else None
+
+
 @dataclass
 class QuoteItem:
     line_no: int
@@ -168,4 +172,111 @@ class Quote:
             cancelled_at=data.get("cancelled_at"),
             locked_at=data.get("locked_at"),
             deleted_at=data.get("deleted_at"),
+        )
+
+
+# --------------------------------------------------------------------------- PURCHASE-1
+@dataclass
+class AssetProduct:
+    """`asset_products/{id}` 문서 1건 — 상품 마스터. `id`는 auto-id(상품명은 바뀔 수 있어서
+    문서 ID로 안 씀, specs/PURCHASE-1/tech/01-data-model.md § 1)."""
+
+    id: str
+    name: str
+    vendor: str | None
+    asset_category: str
+    is_active: bool
+    created_at: datetime
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "vendor": self.vendor,
+            "asset_category": self.asset_category,
+            "is_active": self.is_active,
+            "created_at": self.created_at,
+        }
+
+    @classmethod
+    def from_doc(cls, doc_id: str, data: dict) -> "AssetProduct":
+        return cls(
+            id=doc_id,
+            name=data["name"],
+            vendor=data.get("vendor"),
+            asset_category=data["asset_category"],
+            is_active=data.get("is_active", True),
+            created_at=data["created_at"],
+        )
+
+
+@dataclass
+class AssetUnit:
+    """`asset_units/{unit_no}` 문서 1건 — 구매관리 탭 전용(무엇을 언제 얼마에 샀는지).
+    `id` == `unit_no`(예: "인텔리제이-001") == Firestore 문서 ID(01-data-model.md § 3).
+
+    배정 관련 필드는 여기 없다 — 자산관리 탭(`asset_assignments`, 별도 구현)의 소관이다."""
+
+    id: str
+    unit_no: str
+    product_id: str
+    product_name: str
+    asset_category: str
+
+    purchase_date: date
+    purchased_from: str | None
+    price: int
+
+    unit_type: str | None  # "KEY" | "ACCOUNT" | None(HW)
+    key_value: str | None
+
+    expire_date: date | None
+    status: str  # AVAILABLE | ASSIGNED | EXPIRED — 이 PR 범위에서는 AVAILABLE/EXPIRED만 씀
+
+    source_quote_id: str | None
+    group_code: str
+
+    created_at: datetime
+    updated_at: datetime | None = None
+    retired_at: datetime | None = None
+
+    def to_dict(self) -> dict:
+        return {
+            "unit_no": self.unit_no,
+            "product_id": self.product_id,
+            "product_name": self.product_name,
+            "asset_category": self.asset_category,
+            "purchase_date": self.purchase_date.isoformat(),
+            "purchased_from": self.purchased_from,
+            "price": self.price,
+            "unit_type": self.unit_type,
+            "key_value": self.key_value,
+            "expire_date": self.expire_date.isoformat() if self.expire_date else None,
+            "status": self.status,
+            "source_quote_id": self.source_quote_id,
+            "group_code": self.group_code,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "retired_at": self.retired_at,
+        }
+
+    @classmethod
+    def from_doc(cls, doc_id: str, data: dict) -> "AssetUnit":
+        return cls(
+            id=doc_id,
+            unit_no=data["unit_no"],
+            product_id=data["product_id"],
+            product_name=data["product_name"],
+            asset_category=data["asset_category"],
+            purchase_date=_parse_date(data["purchase_date"]),
+            purchased_from=data.get("purchased_from"),
+            price=data["price"],
+            unit_type=data.get("unit_type"),
+            key_value=data.get("key_value"),
+            expire_date=_parse_date_opt(data.get("expire_date")),
+            status=data["status"],
+            source_quote_id=data.get("source_quote_id"),
+            group_code=data["group_code"],
+            created_at=data["created_at"],
+            updated_at=data.get("updated_at"),
+            retired_at=data.get("retired_at"),
         )

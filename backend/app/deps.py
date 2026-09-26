@@ -12,7 +12,7 @@ from .auth import CurrentUser, resolve_token
 from .config import ROLE_GROUP_MANAGER, ROLE_SUPER_ADMIN
 from .database import get_client
 from .errors import FORBIDDEN_ROLE, NOT_AUTHENTICATED, NOT_FOUND, AppError
-from .models import Quote
+from .models import AssetUnit, Quote
 
 
 def get_db() -> firestore.Client:
@@ -49,3 +49,9 @@ def assert_can_view(quote: Quote, user: CurrentUser) -> None:
     if user.role == ROLE_GROUP_MANAGER and quote.group_code != user.group_code:
         # 존재 은닉
         raise AppError(NOT_FOUND, 404, "견적서를 찾을 수 없습니다.")
+
+
+def assert_can_view_asset_unit(unit: AssetUnit, user: CurrentUser) -> None:
+    """PURCHASE-1: 그룹관리자는 본인 그룹 자산만(quotes와 동일 원칙 — 존재 은닉)."""
+    if user.role == ROLE_GROUP_MANAGER and unit.group_code != user.group_code:
+        raise AppError(NOT_FOUND, 404, "자산을 찾을 수 없습니다.")
