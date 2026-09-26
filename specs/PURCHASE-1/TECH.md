@@ -86,9 +86,22 @@ python -m pytest tests/test_purchase.py -v
 
 로컬 검증 결과: 신규 14개 + 기존 36개 = **50개 전부 통과**, 회귀 없음.
 
+## 프론트엔드 구현 완료 (2026-09)
+
+`frontend/src/pages/Purchase{List,Form,Detail,ProductList}.tsx` — 기존 `design/AppShell`·
+`Sidebar`·`/purchase` 라우트를 그대로 확장(새 디자인 시스템 없음). `api/purchase.ts`에 엔드포인트
+래퍼, `api/client.ts`에 `PATCH` 메서드 지원 추가(상품 활성/비활성 토글용).
+
+로컬 Firestore 에뮬레이터 + 실행 중인 개발 서버로 브라우저 전체 플로우를 직접 확인했다: 상품
+등록 → 구매 유닛 등록(채번 `인텔리제이-001` 확인) → 목록/필터 → 견적 연동 시 해당 견적서
+자동 잠금(`읽기전용(구매반영)` 배지 표시 확인) → 폐기 처리(상태 `만료` 전환, 번호 보존).
+
+**알려진 개선 포인트(치명적이지 않음)**: SW 상품인데 유닛 타입(키/계정)을 선택하지 않고
+등록해도 현재는 막지 않는다 — 실사용하면서 필수로 강제할지 결정.
+
 ## 남은 작업
 
-1. 프론트엔드(`/purchase` 라우트) — 상품 마스터 관리 화면, 유닛 목록/등록/상세·폐기 화면.
+1. ~~프론트엔드(`/purchase` 라우트)~~ — 완료.
 2. 자산관리(`asset_assignments`) — 팀원 구현, 이 문서의 `AssetUnit.status` 전이(AVAILABLE↔ASSIGNED)를
    그쪽에서 트랜잭션으로 갱신하게 된다(`tech/01-data-model.md` § 6-7 참고).
 3. `firestore.indexes.json` — 실제 배포 전 `asset_units`의 등호 필터 조합(product_id+status,
