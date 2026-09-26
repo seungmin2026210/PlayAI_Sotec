@@ -138,6 +138,10 @@ label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--
 .badge-cancelled { background: #e5e7eb; color: #4b5563; }
 .badge-lock { background: #fef3c7; color: #92400e; }
 
+.badge-asset-available { background: #dcfce7; color: #15803d; }
+.badge-asset-assigned { background: #eef2ff; color: #4338ca; }
+.badge-asset-expired { background: #e5e7eb; color: #4b5563; }
+
 .reject-box { border-color: #f3c9c9; background: #fff7f7; }
 .reject-box p { margin: 6px 0 0; }
 

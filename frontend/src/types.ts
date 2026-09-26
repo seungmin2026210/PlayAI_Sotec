@@ -20,6 +20,7 @@ export interface Meta {
   vat_rate: number;
   truncate_unit: number;
   statuses: { code: QuoteStatus; label: string }[];
+  asset_categories: { code: AssetCategory; label: string }[];
 }
 
 export interface QuoteItem {
@@ -128,6 +129,102 @@ export interface ListFilters {
   issue_date_from?: string;
   issue_date_to?: string;
   issuer_name?: string;
+  page?: number;
+  size?: number;
+}
+
+// --------------------------------------------------------------------------- PURCHASE-1
+export type AssetCategory = "SW" | "HW" | "EDU";
+export type AssetUnitStatus = "AVAILABLE" | "ASSIGNED" | "EXPIRED";
+export type AssetUnitType = "KEY" | "ACCOUNT";
+
+export interface AssetProduct {
+  id: string;
+  name: string;
+  vendor: string | null;
+  asset_category: AssetCategory;
+  asset_category_label: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface AssetProductListResponse {
+  items: AssetProduct[];
+}
+
+export interface AssetProductPayload {
+  name: string;
+  vendor: string | null;
+  asset_category: AssetCategory;
+}
+
+export interface AssetProductPatchPayload {
+  name?: string;
+  vendor?: string | null;
+  is_active?: boolean;
+}
+
+export interface AssetUnit {
+  id: string; // == unit_no
+  unit_no: string;
+  product_id: string;
+  product_name: string;
+  asset_category: AssetCategory;
+  asset_category_label: string;
+  purchase_date: string;
+  purchased_from: string | null;
+  price: number;
+  unit_type: AssetUnitType | null;
+  unit_type_label: string | null;
+  key_value: string | null;
+  expire_date: string | null;
+  status: AssetUnitStatus;
+  status_label: string;
+  source_quote_id: string | null;
+  group_code: string;
+  group_name: string;
+  created_at: string;
+  updated_at: string | null;
+  retired_at: string | null;
+}
+
+export interface AssetUnitListItem {
+  id: string;
+  unit_no: string;
+  product_name: string;
+  asset_category: AssetCategory;
+  asset_category_label: string;
+  purchase_date: string;
+  price: number;
+  status: AssetUnitStatus;
+  status_label: string;
+  group_code: string;
+  group_name: string;
+}
+
+export interface AssetUnitListResponse {
+  total: number;
+  page: number;
+  size: number;
+  items: AssetUnitListItem[];
+}
+
+export interface AssetUnitPayload {
+  product_id: string;
+  purchase_date: string;
+  purchased_from: string | null;
+  price: number;
+  unit_type: AssetUnitType | null;
+  key_value: string | null;
+  expire_date: string | null;
+  group_code: string;
+  source_quote_id: string | null;
+}
+
+export interface AssetUnitListFilters {
+  product_id?: string;
+  status?: string;
+  group_code?: string;
   page?: number;
   size?: number;
 }

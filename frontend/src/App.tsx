@@ -6,6 +6,10 @@ import { Placeholder } from "./pages/Placeholder";
 import { QuoteList } from "./pages/QuoteList";
 import { QuoteDetail } from "./pages/QuoteDetail";
 import { QuoteForm } from "./pages/QuoteForm";
+import { PurchaseList } from "./pages/PurchaseList";
+import { PurchaseForm } from "./pages/PurchaseForm";
+import { PurchaseDetail } from "./pages/PurchaseDetail";
+import { PurchaseProductList } from "./pages/PurchaseProductList";
 import { AppShell } from "./design/AppShell";
 import type { ReactNode } from "react";
 
@@ -65,7 +69,31 @@ export default function App() {
         path="/purchase"
         element={
           <Protected>
-            <Placeholder icon="FiRrShoppingCart" label="구매관리" />
+            <PurchaseList />
+          </Protected>
+        }
+      />
+      <Route
+        path="/purchase/products"
+        element={
+          <Protected>
+            <PurchaseProductList />
+          </Protected>
+        }
+      />
+      <Route
+        path="/purchase/new"
+        element={
+          <Protected>
+            <PurchaseForm />
+          </Protected>
+        }
+      />
+      <Route
+        path="/purchase/:unitNo"
+        element={
+          <Protected>
+            <PurchaseDetail />
           </Protected>
         }
       />
