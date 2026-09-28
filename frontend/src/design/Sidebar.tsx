@@ -13,7 +13,7 @@ import sotecMark from "../assets/sotec-mark.png";
 const CONTRACT_CHILDREN = [
   { key: "quote", icon: "FiRrEnvelope", label: "견적관리", path: "/quotes" },
   { key: "purchase", icon: "FiRrShoppingCart", label: "구매관리", path: "/purchase" },
-  { key: "contract", icon: "FiRrUser", label: "계약관리", path: "/contract" },
+  // 계약관리(/contract)는 백엔드 미구현 플레이스홀더라 메뉴에서 숨김. 라우트는 App.tsx 에 유지.
   { key: "assets", icon: "FiRrBox", label: "자산관리", path: "/assets" },
 ] as const;
 
