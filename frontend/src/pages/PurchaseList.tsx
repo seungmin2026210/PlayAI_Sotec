@@ -6,7 +6,7 @@ import { useAuth } from "../auth";
 import { useMeta } from "../hooks/useMeta";
 import { useToast } from "../components/Toast";
 import { SuperAdminOnly } from "../components/RoleGate";
-import { AssetStatusBadge } from "../components/StatusBadge";
+import { AssetLinkBadge, AssetStatusBadge } from "../components/StatusBadge";
 import { formatWon } from "../lib/money";
 import type { AssetProduct, AssetUnitListFilters, AssetUnitListResponse } from "../types";
 
@@ -181,6 +181,7 @@ export function PurchaseList() {
                   <td className="num">{formatWon(u.price)}</td>
                   <td>
                     <AssetStatusBadge status={u.status} />
+                    <AssetLinkBadge unit={u} />
                   </td>
                 </tr>
               ))}

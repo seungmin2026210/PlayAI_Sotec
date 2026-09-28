@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { getAssetUnit, retireAssetUnit } from "../api/purchase";
 import { ApiError } from "../api/client";
 import { useToast } from "../components/Toast";
 import { SuperAdminOnly } from "../components/RoleGate";
-import { AssetStatusBadge } from "../components/StatusBadge";
+import { AssetLinkBadge, AssetStatusBadge } from "../components/StatusBadge";
 import { formatWon } from "../lib/money";
 import type { AssetUnit } from "../types";
 
@@ -35,7 +35,12 @@ export function PurchaseDetail() {
   }, [reload]);
 
   async function onRetire() {
-    if (!window.confirm("폐기 처리하면 되돌릴 수 없습니다. 번호는 재사용되지 않습니다. 계속할까요?"))
+    // C4: 자산으로 가져온 유닛이어도 자산은 영향 없음(가져올 때 복사) — 경고만 한다.
+    const linked =
+      unit?.asset_link_kind && unit.asset_nos.length
+        ? `${unit.asset_link_kind === "IMPORTED" ? "자산" : "갱신"} ${unit.asset_nos[0]}${unit.asset_nos.length > 1 ? ` 외 ${unit.asset_nos.length - 1}건` : ""}에 연결된 구매 기록입니다(자산은 그대로 유지됩니다).\n`
+        : "";
+    if (!window.confirm(`${linked}폐기 처리하면 되돌릴 수 없습니다. 번호는 재사용되지 않습니다. 계속할까요?`))
       return;
     setBusy(true);
     try {
@@ -57,7 +62,7 @@ export function PurchaseDetail() {
       <div className="page-head">
         <div>
           <h1>
-            {unit.unit_no} <AssetStatusBadge status={unit.status} />
+            {unit.unit_no} <AssetStatusBadge status={unit.status} /> <AssetLinkBadge unit={unit} />
           </h1>
           <p className="muted">
             {unit.group_code} · {unit.group_name} / {unit.asset_category_label}
@@ -132,13 +137,23 @@ export function PurchaseDetail() {
         </div>
       </div>
 
-      {unit.status === "AVAILABLE" && (
-        <div className="card">
-          <p className="muted">
-            이 자산은 아직 배정되지 않았습니다(재고). 배정은 자산관리 화면에서 처리합니다.
+      <div className="card">
+        {unit.asset_nos.length > 0 ? (
+          <p>
+            {unit.asset_link_label}:{" "}
+            {unit.asset_nos.map((no, i) => (
+              <span key={no}>
+                {i > 0 && ", "}
+                <Link to={`/assets/item/${no}`}>{no}</Link>
+              </span>
+            ))}
           </p>
-        </div>
-      )}
+        ) : (
+          <p className="muted">
+            자산으로 가져오지 않은 구매 기록입니다. 사내에서 쓰는 자산이면 자산관리 › 구매에서 가져오기로 등록하세요.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
