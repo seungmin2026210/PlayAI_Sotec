@@ -14,6 +14,7 @@ const CONTRACT_CHILDREN = [
   { key: "quote", icon: "FiRrEnvelope", label: "견적관리", path: "/quotes" },
   { key: "purchase", icon: "FiRrShoppingCart", label: "구매관리", path: "/purchase" },
   { key: "contract", icon: "FiRrUser", label: "계약관리", path: "/contract" },
+  { key: "assets", icon: "FiRrBox", label: "자산관리", path: "/assets" },
 ] as const;
 
 const navRowBase: CSSProperties = {

@@ -12,7 +12,21 @@ from fastapi.testclient import TestClient
 from app.database import get_client
 from app.main import app
 
-_COLLECTIONS = ["quotes", "number_sequences", "retired_numbers"]
+_COLLECTIONS = [
+    "quotes",
+    "number_sequences",
+    "retired_numbers",
+    "asset_products",
+    "asset_product_seq",
+    "asset_units",
+    # ASSET-1
+    "assets",
+    "asset_seq",
+    "asset_assignments",
+    "asset_renewals",
+    "password_reveal_logs",
+    "members",
+]
 
 
 def _delete_collection(client, name: str) -> None:

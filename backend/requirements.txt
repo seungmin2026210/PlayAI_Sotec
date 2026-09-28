@@ -8,5 +8,6 @@ itsdangerous==2.2.0
 openpyxl==3.1.5
 Pillow==12.3.0   # openpyxl 이미지(로고/인감) 삽입 + scripts/make_seal.py 임시 직인 생성. 미설치여도 export 는 조용히 로고/인감 생략
 reportlab==4.2.5 # PDF. 순수 파이썬(네이티브 라이브러리 의존 없음) — Vercel Serverless 등에서도 동작. 한글 폰트는 app/assets/fonts 에 임베드
+cryptography==50.0.1  # ASSET-1 계정 비밀번호 Fernet 암호화(키: ASSET_SECRET_KEY 환경변수)
 pytest==8.3.4
 httpx==0.28.1

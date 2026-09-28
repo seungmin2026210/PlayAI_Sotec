@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     token_secret: str = "dev-secret-change-me"
     token_ttl_hours: int = 12
+    # ASSET-1 비밀번호 암호화(Fernet) 키. 코드·저장소에 두지 않는다 — 환경변수 ASSET_SECRET_KEY.
+    # 없으면 비밀번호가 포함된 요청만 501 SECRET_KEY_MISSING(services/asset_secret.py).
+    asset_secret_key: str | None = None
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -174,3 +177,75 @@ STATUS_LABELS: dict[str, str] = {
     STATUS_REJECTED: "반려됨",
     STATUS_CANCELLED: "취소됨",
 }
+
+# ---------------------------------------------------------------------------
+# 구매관리 · 자산관리 (PURCHASE-1, specs/PURCHASE-1/)
+# ---------------------------------------------------------------------------
+ASSET_CATEGORY_LABELS: dict[str, str] = {
+    "SW": "소프트웨어",
+    "HW": "하드웨어",
+    "EDU": "교육자산",
+}
+ASSET_CATEGORIES = tuple(ASSET_CATEGORY_LABELS.keys())
+
+ASSET_UNIT_STATUS_AVAILABLE = "AVAILABLE"
+ASSET_UNIT_STATUS_ASSIGNED = "ASSIGNED"
+ASSET_UNIT_STATUS_EXPIRED = "EXPIRED"
+
+ASSET_UNIT_STATUS_LABELS: dict[str, str] = {
+    ASSET_UNIT_STATUS_AVAILABLE: "재고",
+    ASSET_UNIT_STATUS_ASSIGNED: "배정됨",
+    ASSET_UNIT_STATUS_EXPIRED: "만료",
+}
+
+ASSET_UNIT_TYPE_LABELS: dict[str, str] = {
+    "KEY": "키",
+    "ACCOUNT": "계정",
+}
+
+# ---------------------------------------------------------------------------
+# 자산관리 (ASSET-1, specs/ASSET-1/) — ASSET_CATEGORIES 는 위 PURCHASE-1 것을 재사용
+# ---------------------------------------------------------------------------
+ASSET_STATUS_IDLE = "IDLE"          # 미사용
+ASSET_STATUS_IN_USE = "IN_USE"      # 사용 중
+ASSET_STATUS_DISPOSED = "DISPOSED"  # 폐기(soft delete)
+
+ASSET_STATUS_LABELS: dict[str, str] = {
+    ASSET_STATUS_IDLE: "미사용",
+    ASSET_STATUS_IN_USE: "사용 중",
+    ASSET_STATUS_DISPOSED: "폐기",
+}
+
+# 자산관리 화면의 유형 표기(C6: 구매관리 라벨 "교육자산"은 그대로 두고 여기서만 "교육").
+ASSET_MENU_CATEGORY_LABELS: dict[str, str] = {"SW": "SW", "HW": "HW", "EDU": "교육"}
+
+# 소분류 — 임시 결정 P7(초기 목록). 유형별 {코드: 라벨}. EDU 는 소분류 없음.
+ASSET_SUBCATEGORIES: dict[str, dict[str, str]] = {
+    "SW": {"LICENSE": "라이선스", "AI_SUB": "AI 구독", "ETC": "기타"},
+    "HW": {
+        "LAPTOP": "노트북", "MONITOR": "모니터", "MOUSE": "마우스", "KEYBOARD": "키보드",
+        "HUB": "허브", "ROUTER": "라우터", "ETC": "기타",
+    },
+    "EDU": {},
+}
+
+ASSET_DISPOSED_REASON_DISPOSED = "DISPOSED"
+ASSET_DISPOSED_REASON_IMPORT_CANCELLED = "IMPORT_CANCELLED"
+ASSET_DISPOSED_REASON_LABELS: dict[str, str] = {
+    ASSET_DISPOSED_REASON_DISPOSED: "폐기",
+    ASSET_DISPOSED_REASON_IMPORT_CANCELLED: "가져오기 취소",
+}
+
+# 구매 유닛 → 자산 연결 종류(COORDINATION C3). asset_units.asset_link_kind 값.
+ASSET_LINK_IMPORTED = "IMPORTED"
+ASSET_LINK_RENEWED = "RENEWED"
+ASSET_LINK_LABELS: dict[str, str] = {
+    ASSET_LINK_IMPORTED: "자산 등록됨",
+    ASSET_LINK_RENEWED: "갱신에 사용됨",
+}
+
+ASSET_NO_SEQ_MAX = 999        # 연·유형당 순번 3자리(D6)
+ASSET_EXPIRING_DAYS = 30      # "만료 임박" 배지 / 대시보드 D-30
+ASSET_RENEWAL_KPI_FAR_DAYS = 90
+ASSET_BULK_MAX = 100          # 수량 N 등록 상한 — 임시 결정 P8
+ASSET_TZ_OFFSET_HOURS = 9     # "오늘"·"올해" 기준 KST(D45). DST 없음 → 고정 오프셋

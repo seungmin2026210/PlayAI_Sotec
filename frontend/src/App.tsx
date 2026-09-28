@@ -6,6 +6,16 @@ import { Placeholder } from "./pages/Placeholder";
 import { QuoteList } from "./pages/QuoteList";
 import { QuoteDetail } from "./pages/QuoteDetail";
 import { QuoteForm } from "./pages/QuoteForm";
+import { PurchaseList } from "./pages/PurchaseList";
+import { PurchaseForm } from "./pages/PurchaseForm";
+import { PurchaseDetail } from "./pages/PurchaseDetail";
+import { PurchaseProductList } from "./pages/PurchaseProductList";
+import { AssetList } from "./pages/AssetList";
+import { AssetForm } from "./pages/AssetForm";
+import { AssetImport } from "./pages/AssetImport";
+import { AssetDetail } from "./pages/AssetDetail";
+import { MemberList } from "./pages/MemberList";
+import { MemberDetail } from "./pages/MemberDetail";
 import { AppShell } from "./design/AppShell";
 import type { ReactNode } from "react";
 
@@ -65,7 +75,88 @@ export default function App() {
         path="/purchase"
         element={
           <Protected>
-            <Placeholder icon="FiRrShoppingCart" label="구매관리" />
+            <PurchaseList />
+          </Protected>
+        }
+      />
+      <Route
+        path="/purchase/products"
+        element={
+          <Protected>
+            <PurchaseProductList />
+          </Protected>
+        }
+      />
+      <Route
+        path="/purchase/new"
+        element={
+          <Protected>
+            <PurchaseForm />
+          </Protected>
+        }
+      />
+      <Route
+        path="/purchase/:unitNo"
+        element={
+          <Protected>
+            <PurchaseDetail />
+          </Protected>
+        }
+      />
+      <Route path="/assets" element={<Navigate to="/assets/sw" replace />} />
+      <Route
+        path="/assets/members"
+        element={
+          <Protected>
+            <MemberList />
+          </Protected>
+        }
+      />
+      <Route
+        path="/assets/members/:employeeNo"
+        element={
+          <Protected>
+            <MemberDetail />
+          </Protected>
+        }
+      />
+      <Route
+        path="/assets/item/:assetNo"
+        element={
+          <Protected>
+            <AssetDetail />
+          </Protected>
+        }
+      />
+      <Route
+        path="/assets/item/:assetNo/edit"
+        element={
+          <Protected>
+            <AssetForm mode="edit" />
+          </Protected>
+        }
+      />
+      <Route
+        path="/assets/:category"
+        element={
+          <Protected>
+            <AssetList />
+          </Protected>
+        }
+      />
+      <Route
+        path="/assets/:category/new"
+        element={
+          <Protected>
+            <AssetForm mode="create" />
+          </Protected>
+        }
+      />
+      <Route
+        path="/assets/:category/import"
+        element={
+          <Protected>
+            <AssetImport />
           </Protected>
         }
       />

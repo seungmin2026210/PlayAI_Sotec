@@ -8,6 +8,7 @@ SW 자산 견적서 관리 시스템 (QUOTE-1). 바탕화면 `기획서.md.md` v
 - 기술 스펙(아키텍처·구현): `specs/QUOTE-1/TECH.md` + `specs/QUOTE-1/tech/01~11-*.md`
 - 결정 로그: `specs/QUOTE-1/DECISIONS.md`
 - **배포**: Vercel(프론트+백엔드) + Firebase(Firestore, DB) 로 확정 — `backend/app` 은 Firestore 기준으로 마이그레이션 완료(SQLAlchemy/PostgreSQL 제거). 설계·경합 실측 결과는 `specs/QUOTE-1/tech/12-firestore-migration.md` 참고. 남은 것: Vercel 배포 파이프라인 자체 구성(§9), `firestore.indexes.json` 확정.
+- **구매관리 / 자산관리**: `specs/PURCHASE-1/`, `specs/ASSET-1/`(PRODUCT·TECH·DECISIONS·COORDINATION). 자산관리 임시 결정은 `specs/ASSET-1/DECISIONS.md` P1~P9, 구매관리와의 임시 합의는 `COORDINATION.md`.
 - **미정(❓) 항목 처리**: `specs/QUOTE-1/tech/10-provisional-decisions.md` — 기획서에서 협의가 안 끝난 항목을 "임시 결정 + 격리 위치"로 구현했다. 협의 결과가 나오면 그 표의 **격리 위치만** 수정한다.
 
 스펙과 코드는 같은 PR 로 함께 진화시킨다. 동작/설계가 바뀌면 코드와 함께 해당 섹션 MD 도 갱신한다.
@@ -39,9 +40,10 @@ firebase.json, firestore.rules, firestore.indexes.json   Firestore 에뮬레이�
 | `services/status.py` | 상태 전이표 `ALLOWED`, `guard_mutable`, `apply_transition`, `apply_purchase_lock`, `apply_edit_policy`(**open-10 수정정책 격리**). Firestore 전환 후에도 무변경(속성 mutation 만 하는 순수 함수) |
 | `services/export_excel.py` | openpyxl: 개별 견적서(실제 견적서.jpg 양식) / 목록. APPROVED 는 대표자명 옆 직인 합성 |
 | `services/export_pdf.py` | reportlab(순수 파이썬), 엑셀과 동일 양식. 한글 폰트는 `app/assets/fonts/`에 임베드해 시스템 의존성 없음(Vercel Serverless 등에서도 동작). import/렌더 실패 시 `501 PDF_UNAVAILABLE`, 서버는 계속 동작 |
-| `routers/` | `auth.py`, `meta.py`, `quotes.py` — HTTP·권한·직렬화만, 로직은 services |
+| `services/asset_*.py`, `services/members.py` | 자산관리(ASSET-1): `asset_dates`(**KST `today_kst()` 유일 계산처**, 날짜 규칙 `validate_period`), `asset_no`(`SW-26-001` 채번, 수량 N), `asset_bulk`(입력 정리·금액 분할, 순수), `asset_registration`(등록·가져오기·가져오기 취소), `asset_assignment`(배정·회수·이관·이력수정·배정 취소), `asset_renewal`, `asset_status`, `asset_secret`(Fernet, 키 `ASSET_SECRET_KEY`), `asset_query`(목록·사용자별·대시보드 갱신 집계) |
+| `routers/` | `auth.py`, `meta.py`, `quotes.py`, `asset_products.py`/`asset_units.py`(구매관리), `assets.py`/`members.py`/`dashboard.py`(자산관리) — HTTP·권한·직렬화만, 로직은 services. 비밀번호 열람 판정 `deps.can_reveal_password`, 라이선스키 마스킹 `presenter.mask_license_key` 가 격리 지점 |
 
-라우트 등록 순서 주의: `GET /api/quotes/export.xlsx` 는 `GET /api/quotes/{quote_id}` **보다 먼저** 선언해야 한다.
+라우트 등록 순서 주의: `GET /api/quotes/export.xlsx` 는 `GET /api/quotes/{quote_id}` **보다 먼저** 선언해야 한다. `/api/assets/` 아래 고정 경로(`export.xlsx`, `importable`, `import`, `import/cancel`, `renew`)도 `/{asset_no}` 보다 먼저.
 
 ### frontend/src
 
@@ -57,10 +59,12 @@ firebase.json, firestore.rules, firestore.indexes.json   Firestore 에뮬레이�
 | `components/{Toast,StatusBadge,ItemsEditor}.tsx` | |
 | `design/` | Claude Design 프로젝트("로그인 및 대시보드 시스템 구축", kanban-design-system) 에서 이식한 대시보드 셸. `tokens.css`(디자인 토큰) · `Icon.tsx`(아이콘 10종) · `Sidebar.tsx`/`TopBar.tsx`/`AppShell.tsx`(사이드바+상단바 레이아웃, `/login` 제외 전체 라우트를 감쌈) |
 | `pages/{Login,QuoteList,QuoteDetail,QuoteForm}.tsx` | |
-| `pages/Dashboard.tsx` | 로그인 후 첫 화면(`/dashboard`). 통계·갱신 캘린더·예산 집행은 **범위 밖(향후 단계) 목업 데이터** — 실제 데이터가 연동된 화면은 계약관리 › 견적관리(`/quotes`, 기존 QuoteList) 뿐 |
-| `pages/Placeholder.tsx` | 구매관리(`/purchase`)·계약관리(`/contract`) 등 아직 백엔드가 없는 사이드바 메뉴용 "준비 중" 화면 |
+| `pages/Dashboard.tsx` | 로그인 후 첫 화면(`/dashboard`). 갱신 임박(D-30, 만료됨) KPI·갱신 캘린더·다가오는 갱신 일정은 `/api/dashboard/renewals` 실데이터(ASSET-1), 나머지 통계·예산·자산 현황은 **목업("예시" 표시)** |
+| `pages/Purchase*.tsx` | 구매관리(`/purchase`) |
+| `pages/Asset*.tsx`, `pages/Member*.tsx` | 자산관리(`/assets/{sw,hw,edu}`, `/assets/item/:assetNo`, `/assets/members`). 공용 컴포넌트 `components/{AssetTabs,AssetBadges,TargetPicker,Modal}.tsx`, KST 날짜 `lib/date.ts` |
+| `pages/Placeholder.tsx` | 계약관리(`/contract`) 등 아직 백엔드가 없는 사이드바 메뉴용 "준비 중" 화면 |
 
-사이드바 메뉴 구조(계약관리 그룹 하위 견적관리/구매관리/계약관리)와 라우팅은 `design/Sidebar.tsx` 에서 관리 — 새 메뉴 추가 시 `CONTRACT_CHILDREN` 과 `App.tsx` 라우트를 함께 수정한다.
+사이드바 메뉴 구조(계약관리 그룹 하위 견적관리/구매관리/계약관리/자산관리)와 라우팅은 `design/Sidebar.tsx` 에서 관리 — 새 메뉴 추가 시 `CONTRACT_CHILDREN` 과 `App.tsx` 라우트를 함께 수정한다.
 
 권한은 프론트 버튼 숨김이 아니라 **서버가 최종 방어선**. 새 쓰기 엔드포인트엔 `Depends(require_super_admin)` 필수.
 
@@ -84,6 +88,7 @@ uvicorn app.main:app --reload --port 8000          # /docs 에 API 문서
 - PDF export: reportlab(순수 파이썬) + `app/assets/fonts/` 임베드 폰트라 OS/시스템 라이브러리 무관하게 동작(Vercel Serverless 포함). 실패 시에만 `501 PDF_UNAVAILABLE`.
 - 임시 직인 재생성(문구/크기 변경 시): `py -3 ../scripts/make_seal.py`. 실제 직인은 `backend/app/assets/sotec-seal.png` 교체.
 - 실제 Firestore(배포)에 붙일 땐 `.env`의 `FIRESTORE_EMULATOR_HOST` 를 지우고 `GOOGLE_APPLICATION_CREDENTIALS`(서비스 계정 키 경로)를 설정(12-firestore-migration.md § 9).
+- 자산 계정 비밀번호 저장/열람엔 `.env` 의 `ASSET_SECRET_KEY`(Fernet 키, 생성법은 `.env.example`) 필요. 없으면 비밀번호가 포함된 요청만 `501 SECRET_KEY_MISSING`. **키를 잃으면 저장된 비밀번호 복구 불가** — 배포 키는 따로 백업.
 
 ### 프론트엔드
 ```bash
@@ -98,7 +103,7 @@ npm run build                     # tsc && vite build
 ```bash
 npx firebase-tools emulators:start --only firestore --project demo-quote &   # 미기동 시 DB 테스트는 skip
 cd backend && .venv\Scripts\activate
-pytest                            # 32 tests.
+pytest                            # 101 tests (자산관리: tests/test_assets.py, tests/unit/test_asset_rules.py).
 ```
 - `conftest.py` 가 `FIRESTORE_EMULATOR_HOST`(기본 `127.0.0.1:8090`) 로 접속, 매 테스트 전 `quotes`/`number_sequences`/`retired_numbers` 문서를 전부 지운다(TRUNCATE 대응). 에뮬레이터 미기동 시 연결 실패로 DB 테스트는 skip, `tests/unit/` 만 실행.
 - 계산/채번 로직만 빠르게 확인: `python -c "from app.services.calculation import compute; ..."` (DB 불필요, 순수 함수)
@@ -116,4 +121,4 @@ pytest                            # 32 tests.
 
 ## 범위 밖 (건드리지 말 것 — 향후 단계)
 
-실제 인증 연동, SMTP 발송, 구매관리 실연동, 예산 관리, 갱신 캘린더, 자산 배정 이력, 감사로그 UI, 반려↔재제출 참조 필드. 발송·구매관리 잠금은 **자리표시만** 구현돼 있다.
+실제 인증 연동(팀원 개인 로그인 포함), SMTP 발송, 예산 관리, 자산 신청→승인 흐름, 감사로그 UI(비밀번호 열람 기록 조회 포함), 반려↔재제출 참조 필드, 계약관리 연동(자산의 계약번호는 임시 자유입력), 대시보드 "갱신 임박 자산(예상 비용)"·"자산 현황" 실데이터화. (갱신 캘린더·자산 배정 이력은 ASSET-1 에서 구현됨.) 발송·구매관리 잠금은 **자리표시만** 구현돼 있다.

@@ -12,7 +12,7 @@ from .auth import CurrentUser, resolve_token
 from .config import ROLE_GROUP_MANAGER, ROLE_SUPER_ADMIN
 from .database import get_client
 from .errors import FORBIDDEN_ROLE, NOT_AUTHENTICATED, NOT_FOUND, AppError
-from .models import Quote
+from .models import Asset, AssetUnit, Member, Quote
 
 
 def get_db() -> firestore.Client:
@@ -49,3 +49,34 @@ def assert_can_view(quote: Quote, user: CurrentUser) -> None:
     if user.role == ROLE_GROUP_MANAGER and quote.group_code != user.group_code:
         # 존재 은닉
         raise AppError(NOT_FOUND, 404, "견적서를 찾을 수 없습니다.")
+
+
+def assert_can_view_asset_unit(unit: AssetUnit, user: CurrentUser) -> None:
+    """PURCHASE-1: 그룹관리자는 본인 그룹 자산만(quotes와 동일 원칙 — 존재 은닉)."""
+    if user.role == ROLE_GROUP_MANAGER and unit.group_code != user.group_code:
+        raise AppError(NOT_FOUND, 404, "자산을 찾을 수 없습니다.")
+
+
+# --------------------------------------------------------------------------- ASSET-1
+def assert_can_view_asset(asset: Asset, user: CurrentUser) -> None:
+    """그룹관리자는 `scope_group_code`(= 현재 사용자 그룹, 미사용·공용이면 등록 그룹 — D24)가
+    본인 그룹인 자산만. 타 그룹은 404(존재 은닉)."""
+    if user.role == ROLE_GROUP_MANAGER and asset.scope_group_code != user.group_code:
+        raise AppError(NOT_FOUND, 404, "자산을 찾을 수 없습니다.")
+
+
+def assert_can_view_member(member: Member, user: CurrentUser) -> None:
+    """D46: 그룹관리자는 본인 그룹 팀원만."""
+    if user.role == ROLE_GROUP_MANAGER and member.group_code != user.group_code:
+        raise AppError(NOT_FOUND, 404, "팀원을 찾을 수 없습니다.")
+
+
+def can_reveal_password(asset: Asset, user: CurrentUser) -> bool:
+    """비밀번호 열람 판정 격리 지점(D16). 지금은 전체관리자만.
+    팀원 로그인 도입 시 `asset.current_member_id == <로그인 팀원 사번>` 조건만 추가한다."""
+    return user.role == ROLE_SUPER_ADMIN
+
+
+def can_see_license_key(user: CurrentUser) -> bool:
+    """D38: 라이선스키 전체 표시·키워드 검색은 전체관리자만. 마스킹은 presenter.mask_license_key."""
+    return user.role == ROLE_SUPER_ADMIN

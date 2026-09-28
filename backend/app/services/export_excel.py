@@ -259,3 +259,52 @@ def build_list_xlsx(quotes: list[Quote]) -> bytes:
 
 def list_filename() -> str:
     return f"quotes_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+
+
+# --------------------------------------------------------------------------- ASSET-1 자산 목록
+# 응답 스키마(AssetListItem — presenter 가 라이선스키 마스킹을 이미 적용, 비밀번호 필드 자체 없음)
+# 를 그대로 받아 쓴다 → 엑셀에 비밀번호가 새거나 마스킹이 빠질 경로가 없다(D27, D38).
+_ASSET_COMMON = [
+    ("자산번호", "asset_no", 12), ("소분류", "subcategory_label", 10), ("품명", "name", 28),
+    ("상태", "status_label", 9), ("현재 사용자", None, 16), ("사용 시작일", "current_start_date", 12),
+    ("그룹", "scope_group_name", 16), ("구매일", "purchase_date", 12), ("금액", "price", 12),
+    ("구매처", "purchased_from", 16), ("유효기간 시작", "valid_from", 12), ("유효기간 종료", "valid_to", 12),
+    ("만료", "expiry_badge", 8),
+]
+_ASSET_TYPED = {
+    "SW": [("버전", "version", 10), ("라이선스키", "license_key", 26), ("계정 ID", "account_id", 20)],
+    "HW": [("제조사", "manufacturer", 12), ("모델명", "model", 16), ("시리얼", "serial_no", 18), ("MAC", "mac_address", 18)],
+    "EDU": [("강의명", "course_title", 28), ("강의 URL", "course_url", 30), ("계정 ID", "account_id", 20)],
+}
+_ASSET_TAIL = [("견적번호", "quote_no", 12), ("계약번호", "contract_no", 14), ("연결 구매", "source_unit_no", 16), ("비고", "note", 30)]
+_EXPIRY_LABEL = {"EXPIRED": "만료", "EXPIRING": "임박"}
+
+
+def build_asset_list_xlsx(category: str, items) -> bytes:
+    cols = _ASSET_COMMON + _ASSET_TYPED[category] + _ASSET_TAIL
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"{category} 자산"
+    for c, (title, _, width) in enumerate(cols, start=1):
+        ws.cell(row=1, column=c, value=title).font = Font(bold=True)
+        ws.column_dimensions[ws.cell(row=1, column=c).column_letter].width = width
+    for r, it in enumerate(items, start=2):
+        for c, (_, attr, _) in enumerate(cols, start=1):
+            if attr is None:
+                v = it.current_member_name or (f"공용 · {it.current_shared_label}" if it.current_shared_label else "")
+            else:
+                v = getattr(it, attr)
+            if attr == "expiry_badge":
+                v = _EXPIRY_LABEL.get(v, "")
+            elif isinstance(v, date):
+                v = v.isoformat()
+            cell = ws.cell(row=r, column=c, value=v)
+            if attr == "price" and v is not None:
+                cell.number_format = _WON
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def asset_list_filename(category: str) -> str:
+    return f"assets_{category}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
