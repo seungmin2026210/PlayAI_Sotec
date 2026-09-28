@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .errors import VALIDATION_ERROR, AppError
-from .routers import asset_products, asset_units, auth, meta, quotes
+from .routers import asset_products, asset_units, assets, auth, dashboard, members, meta, quotes
 
 app = FastAPI(title="SW 자산 견적서 관리 시스템 (QUOTE-1)", version="1.0.0")
 
@@ -58,3 +58,6 @@ app.include_router(meta.router)
 app.include_router(quotes.router)
 app.include_router(asset_products.router)
 app.include_router(asset_units.router)
+app.include_router(assets.router)
+app.include_router(members.router)
+app.include_router(dashboard.router)

@@ -7,7 +7,7 @@ SQLAlchemy ORM 은 더 이상 쓰지 않는다(Firestore 전환, DECISIONS.md �
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import date, datetime
 from typing import Any
 
@@ -238,9 +238,14 @@ class AssetUnit:
     created_at: datetime
     updated_at: datetime | None = None
     retired_at: datetime | None = None
+    # ASSET-1 역참조(COORDINATION C3) — 자산관리 트랜잭션만 쓴다. 기존 문서엔 없음 = None/[].
+    asset_link_kind: str | None = None  # None | "IMPORTED" | "RENEWED"
+    asset_nos: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
+            "asset_link_kind": self.asset_link_kind,
+            "asset_nos": list(self.asset_nos),
             "unit_no": self.unit_no,
             "product_id": self.product_id,
             "product_name": self.product_name,
@@ -279,4 +284,138 @@ class AssetUnit:
             created_at=data["created_at"],
             updated_at=data.get("updated_at"),
             retired_at=data.get("retired_at"),
+            asset_link_kind=data.get("asset_link_kind"),
+            asset_nos=list(data.get("asset_nos") or []),
         )
+
+
+# --------------------------------------------------------------------------- ASSET-1
+# 비즈니스 날짜(구매일·유효기간·사용 시작/종료일)는 `YYYY-MM-DD` 문자열 그대로 둔다 —
+# ISO 문자열은 사전순 비교 = 날짜 비교라 날짜 규칙·만료 판정이 그대로 된다
+# (specs/ASSET-1/tech/01-data-model.md). 문서 필드 = dataclass 필드(평평한 구조).
+def _from_fields(cls, data: dict, **extra):
+    names = {f.name for f in fields(cls)}
+    return cls(**{k: v for k, v in data.items() if k in names}, **extra)
+
+
+@dataclass
+class Asset:
+    """`assets/{asset_no}` 문서 1건. 문서 ID == asset_no."""
+
+    asset_no: str
+    category: str
+    name: str
+    group_code: str
+    scope_group_code: str
+    status: str
+    subcategory: str | None = None
+
+    current_member_id: str | None = None
+    current_member_name: str | None = None
+    current_shared_label: str | None = None
+    current_assignment_id: str | None = None
+    current_start_date: str | None = None
+
+    purchase_date: str | None = None
+    price: int | None = None
+    purchased_from: str | None = None
+    quote_no: str | None = None
+    contract_no: str | None = None
+    source_unit_no: str | None = None
+
+    valid_from: str | None = None
+    valid_to: str | None = None
+
+    version: str | None = None
+    license_key: str | None = None
+    account_id: str | None = None
+    password_enc: str | None = None
+    manufacturer: str | None = None
+    model: str | None = None
+    serial_no: str | None = None
+    mac_address: str | None = None
+    course_title: str | None = None
+    course_url: str | None = None
+
+    note: str | None = None
+    disposed_at: datetime | None = None
+    disposed_reason: str | None = None
+    created_at: datetime | None = None
+    created_by: str | None = None
+    updated_at: datetime | None = None
+    updated_by: str | None = None
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_doc(cls, data: dict) -> "Asset":
+        return _from_fields(cls, data)
+
+
+@dataclass
+class AssetAssignment:
+    """`asset_assignments/{auto-id}` — 사용 이력 1건. end_date None = 사용 중."""
+
+    id: str
+    asset_no: str
+    category: str
+    asset_name: str
+    start_date: str
+    member_id: str | None = None
+    member_name: str | None = None
+    shared_label: str | None = None
+    end_date: str | None = None
+    prev_assignment_id: str | None = None
+    note: str | None = None
+    created_at: datetime | None = None
+    created_by: str | None = None
+    updated_at: datetime | None = None
+    updated_by: str | None = None
+
+    def to_dict(self) -> dict:
+        d = asdict(self)
+        d.pop("id")
+        return d
+
+    @classmethod
+    def from_doc(cls, doc_id: str, data: dict) -> "AssetAssignment":
+        return _from_fields(cls, {k: v for k, v in data.items() if k != "id"}, id=doc_id)
+
+
+@dataclass
+class AssetRenewal:
+    """`asset_renewals/{auto-id}` — 갱신 1회(여러 자산 묶음, D32)."""
+
+    id: str
+    asset_nos: list[str]
+    name: str
+    prev_valid_to: str
+    new_valid_from: str | None
+    new_valid_to: str
+    unit_no: str | None = None
+    created_at: datetime | None = None
+    created_by: str | None = None
+
+    @classmethod
+    def from_doc(cls, doc_id: str, data: dict) -> "AssetRenewal":
+        return _from_fields(cls, {k: v for k, v in data.items() if k != "id"}, id=doc_id)
+
+
+@dataclass
+class Member:
+    """`members/{employee_no}` — 팀원 명단(D10). 삭제 없음, active=False = 퇴사."""
+
+    employee_no: str
+    name: str
+    group_code: str
+    active: bool = True
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_doc(cls, data: dict) -> "Member":
+        return _from_fields(cls, data)

@@ -19,6 +19,13 @@ _COLLECTIONS = [
     "asset_products",
     "asset_product_seq",
     "asset_units",
+    # ASSET-1
+    "assets",
+    "asset_seq",
+    "asset_assignments",
+    "asset_renewals",
+    "password_reveal_logs",
+    "members",
 ]
 
 
