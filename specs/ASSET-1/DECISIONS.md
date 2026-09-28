@@ -75,7 +75,7 @@ PURCHASE-1은 "구매 유닛 = 자산"을 전제로, 자산관리 탭은 `asset_
 | P3 | 팀원 소속 그룹이 바뀌면, 그 사람이 쓰는 자산의 조회 그룹(`scope_group_code`)도 같이 갱신 | `services/members.py` |
 | P4 | ~~이력 날짜 수정 시에만 기간 겹침 검사~~ → **D36으로 확정·확장**(배정·회수·이관에도 적용) | `services/asset_assignment.py` |
 | P5 | 사번은 필수·유일, 팀원 문서 ID로 사용 | `tech/01-data-model.md` §4 |
-| P6 | 목업으로 남는 대시보드 위젯 2개에 "준비 중" 표시 여부 | `frontend/src/pages/Dashboard.tsx` |
+| P6 | 목업으로 남는 대시보드 위젯(통계 3개·갱신 임박 자산 표·예산·그룹별 현황)에 **"예시" 표시**를 단다 | `frontend/src/pages/Dashboard.tsx: sampleTag` |
 | P7 | 소분류 초기 목록(D9)의 구체 항목 | `config.py: ASSET_SUBCATEGORIES` |
 | P8 | 한 번에 등록(가져오기·직접 등록)할 수 있는 수량 상한 100건 | `config.py: ASSET_BULK_MAX` |
 | P9 | 수량 N으로 나눌 때 금액 나머지(원)는 **첫 번째 자산**에 더함 — 합계 = 구매 금액 | `services/asset_bulk.py` |

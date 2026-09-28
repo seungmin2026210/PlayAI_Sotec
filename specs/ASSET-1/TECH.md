@@ -1,9 +1,25 @@
 # ASSET-1 · 기술 스펙 (Tech Spec)
 
 > 사용자 대면 동작: [`PRODUCT.md`](./PRODUCT.md). 데이터 모델: [`tech/01-data-model.md`](./tech/01-data-model.md).
-> 결정 로그: [`DECISIONS.md`](./DECISIONS.md). **구매관리 조율: [`COORDINATION.md`](./COORDINATION.md) — 합의 전 구현 착수 금지.**
+> 결정 로그: [`DECISIONS.md`](./DECISIONS.md). 구매관리 조율: [`COORDINATION.md`](./COORDINATION.md) — C1~C11 을
+> 자산관리 쪽 제안안대로 **임시 확정**해 구현했다(구매관리 담당자 확인 대기).
 >
-> 상태: **설계 완료, 미구현** (2026-09-28).
+> 상태: **구현 완료** (2026-09-28, 브랜치 `feature/asset-1`). 백엔드 `tests/test_assets.py` 41건 +
+> `tests/unit/test_asset_rules.py` 10건 통과. 아래 "구현 메모"가 설계와 달라진 점.
+
+## 구현 메모 (설계 대비)
+
+- `services/asset_registration.py` 신설 — 직접 등록(§8-2)·가져오기(§8-1)·가져오기 취소(§8-9) 트랜잭션.
+  `asset_bulk.py`는 순수 함수(입력 정리·금액 분할·수량 검사)만. `asset_renewal.py`는 갱신(§8-10)만.
+- 목록·대시보드·사용자별 집계는 **등호 필터만** Firestore 에 걸고 나머지(폐기 제외 포함)는 앱 레벨 —
+  등호만 쓰면 복합 인덱스가 필요 없어서 `firestore.indexes.json` 추가 없음.
+- 날짜 규칙의 "겹침"은 경계가 맞닿는 것(앞 이력 종료일 == 새 시작일)을 허용 — 이관은 같은 날 인계라서.
+- KST 는 `zoneinfo` 대신 고정 오프셋(UTC+9, `config.ASSET_TZ_OFFSET_HOURS`) — 서버리스 환경 tzdata 의존 제거.
+- 도메인 규칙 위반은 `400 VALIDATION_ERROR`(PRODUCT 예외표), Pydantic 스키마 형식 오류는 기존대로 `422`.
+- 팀원 중복 사번 등록은 `409 MEMBER_EXISTS`(신규 코드).
+- 복호화 실패(키가 저장 당시와 다름)도 `501 SECRET_KEY_MISSING` 으로 응답(메시지로 구분).
+- `PATCH /api/asset-assignments/{id}`, 배정/회수/이관/취소는 갱신된 **자산 상세**를 반환(화면 즉시 갱신용).
+- 대시보드 "만료됨 N건" 클릭은 SW 탭 만료 필터로 이동(탭 전환 시 필터는 유지되지 않음).
 
 ## 스택
 
@@ -24,7 +40,8 @@ QUOTE-1/PURCHASE-1과 동일(FastAPI + Firestore, React 18 + TS + Vite). 신규 
 | `services/asset_bulk.py` | 수량 N 등록 시 자산 dict N개 생성, 금액 분할(P9 — 나머지 첫 자산) — 순수 함수 |
 | `services/asset_secret.py` | `encrypt(plain)`/`decrypt(token)` — Fernet, 키는 `ASSET_SECRET_KEY` 환경변수. 키 없으면 `501 SECRET_KEY_MISSING` — 비밀번호가 포함된 요청은 **통째로 실패**(D43), 비밀번호 없는 요청은 키를 건드리지 않으므로 정상 |
 | `services/asset_assignment.py` | 배정/회수/이관/이력수정/배정 취소 트랜잭션(data-model §8-3~8-6, §8-8) |
-| `services/asset_renewal.py` | 갱신 트랜잭션(§8-10), 가져오기 취소(§8-9) |
+| `services/asset_registration.py` | 직접 등록(§8-2)·가져오기(§8-1)·가져오기 취소(§8-9), 구매 유닛 → 자산 매핑(C5) |
+| `services/asset_renewal.py` | 갱신 트랜잭션(§8-10) |
 | `services/asset_status.py` | 상태 가드: 폐기 자산 수정 불가, 사용 중 폐기 불가(P1) — `services/status.py` 스타일 순수 함수 |
 | `services/asset_query.py`(확장) | `list_assets`, `renewals(from, to)` 묶음 집계 + KPI(`expired`/`d30`/`d90`), 사용자별 집계, 팀원 상세 `linkable` 판정(D37) |
 | `services/members.py` | 팀원 수정 시 그룹·이름 전파(§8-7) |

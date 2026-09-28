@@ -3,7 +3,8 @@
 배경: [`../DECISIONS.md`](../DECISIONS.md), [`../TECH.md`](../TECH.md). 컨벤션은 QUOTE-1/PURCHASE-1과 동일 —
 의미 있는 문서 ID 우선, 비즈니스 날짜는 `YYYY-MM-DD` 문자열, 시스템 시각은 Timestamp, soft delete는 상태값.
 
-> **설계 단계(미구현).** [`../COORDINATION.md`](../COORDINATION.md) 합의 후 구현.
+> **구현됨**(2026-09-28). [`../COORDINATION.md`](../COORDINATION.md) 는 제안안대로 임시 확정.
+> 설계 대비 달라진 점은 [`../TECH.md`](../TECH.md) "구현 메모".
 > PURCHASE-1 `tech/01-data-model.md` §4·§6·§7(`asset_units` 기반 배정 스케치)을 **대체**한다(COORDINATION C1).
 
 **날짜 기준(D45)**: "오늘"·"올해"는 전부 KST. `services/asset_dates.py: today_kst()` 한 곳에서만 계산하고

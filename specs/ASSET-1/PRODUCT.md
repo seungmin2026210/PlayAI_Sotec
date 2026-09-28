@@ -1,7 +1,7 @@
 # ASSET-1 · 자산관리 (제품 스펙)
 
 > 사용자 대면 동작 기준. 결정 근거는 [`DECISIONS.md`](./DECISIONS.md)(D1~D46), 구현은 [`TECH.md`](./TECH.md).
-> 구매관리와 조율 필요 사항: [`COORDINATION.md`](./COORDINATION.md) — **합의 전 구현 착수 금지.**
+> 구매관리와 조율 사항: [`COORDINATION.md`](./COORDINATION.md) — 제안안대로 임시 확정해 구현됨(구매관리 담당자 확인 대기).
 
 ## 목적
 
