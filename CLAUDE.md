@@ -5,9 +5,9 @@ SW 자산 견적서 관리 시스템 (QUOTE-1). 바탕화면 `기획서.md.md` v
 ## 이 저장소를 다룰 때 먼저 읽을 것
 
 - 제품 스펙(사용자 대면 동작의 source of truth): `specs/QUOTE-1/PRODUCT.md` + `specs/QUOTE-1/product/01~10-*.md`
-- 기술 스펙(아키텍처·구현): `specs/QUOTE-1/TECH.md` + `specs/QUOTE-1/tech/01~11-*.md`
+- 기술 스펙(아키텍처·구현): `specs/QUOTE-1/TECH.md` + `specs/QUOTE-1/tech/01~12-*.md`
 - 결정 로그: `specs/QUOTE-1/DECISIONS.md`
-- **배포**: Vercel(프론트+백엔드) + Firebase(Firestore, DB) 로 확정 — `backend/app` 은 Firestore 기준으로 마이그레이션 완료(SQLAlchemy/PostgreSQL 제거). 설계·경합 실측 결과는 `specs/QUOTE-1/tech/12-firestore-migration.md` 참고. 남은 것: Vercel 배포 파이프라인 자체 구성(§9), `firestore.indexes.json` 확정.
+- **배포**: Vercel(프론트+백엔드) + Firebase(Firestore, DB) 로 확정 — `backend/app` 은 Firestore 기준으로 마이그레이션 완료(SQLAlchemy/PostgreSQL 제거). 설계·경합 실측 결과는 `specs/QUOTE-1/tech/12-firestore-migration.md` 참고. Vercel 배포 파이프라인은 구성 완료(`vercel.json`, `backend/api/index.py`, 배포 오류 수정 커밋 있음) — 실제 프로덕션 가동 상태는 미확인. 남은 것: `firestore.indexes.json` 실배포(`firebase deploy --only firestore:indexes`, 초안만 있고 아직 안 해봄).
 - **구매관리 / 자산관리**: `specs/PURCHASE-1/`, `specs/ASSET-1/`(PRODUCT·TECH·DECISIONS·COORDINATION). 자산관리 임시 결정은 `specs/ASSET-1/DECISIONS.md` P1~P9, 구매관리와의 임시 합의는 `COORDINATION.md`.
 - **미정(❓) 항목 처리**: `specs/QUOTE-1/tech/10-provisional-decisions.md` — 기획서에서 협의가 안 끝난 항목을 "임시 결정 + 격리 위치"로 구현했다. 협의 결과가 나오면 그 표의 **격리 위치만** 수정한다.
 
@@ -18,8 +18,9 @@ SW 자산 견적서 관리 시스템 (QUOTE-1). 바탕화면 `기획서.md.md` v
 ```
 backend/    FastAPI + google-cloud-firestore (DB: Firestore)
 frontend/   React 18 + TypeScript + Vite
-specs/QUOTE-1/   섹션별로 분할된 제품/기술 스펙
+specs/QUOTE-1/, specs/PURCHASE-1/, specs/ASSET-1/   섹션별로 분할된 제품/기술 스펙
 firebase.json, firestore.rules, firestore.indexes.json   Firestore 에뮬레이터/배포 설정
+vercel.json, backend/api/index.py   Vercel 배포 진입점(프론트 정적 빌드 + 백엔드 서버리스 함수)
 ```
 
 ### backend/app
@@ -40,7 +41,8 @@ firebase.json, firestore.rules, firestore.indexes.json   Firestore 에뮬레이�
 | `services/status.py` | 상태 전이표 `ALLOWED`, `guard_mutable`, `apply_transition`, `apply_purchase_lock`, `apply_edit_policy`(**open-10 수정정책 격리**). Firestore 전환 후에도 무변경(속성 mutation 만 하는 순수 함수) |
 | `services/export_excel.py` | openpyxl: 개별 견적서(실제 견적서.jpg 양식) / 목록. APPROVED 는 대표자명 옆 직인 합성 |
 | `services/export_pdf.py` | reportlab(순수 파이썬), 엑셀과 동일 양식. 한글 폰트는 `app/assets/fonts/`에 임베드해 시스템 의존성 없음(Vercel Serverless 등에서도 동작). import/렌더 실패 시 `501 PDF_UNAVAILABLE`, 서버는 계속 동작 |
-| `services/asset_*.py`, `services/members.py` | 자산관리(ASSET-1): `asset_dates`(**KST `today_kst()` 유일 계산처**, 날짜 규칙 `validate_period`), `asset_no`(`SW-26-001` 채번, 수량 N), `asset_bulk`(입력 정리·금액 분할, 순수), `asset_registration`(등록·가져오기·가져오기 취소), `asset_assignment`(배정·회수·이관·이력수정·배정 취소), `asset_renewal`, `asset_status`, `asset_secret`(Fernet, 키 `ASSET_SECRET_KEY`), `asset_query`(목록·사용자별·대시보드 갱신 집계) |
+| `services/asset_numbering.py` | 구매관리(PURCHASE-1) 유닛 채번 `{상품명}-{순번}`. 상품별 독립 시퀀스(`asset_product_seq/{product_id}`), 연도 개념 없음. `routers/asset_units.py: create_asset_unit`가 채번+유닛 생성을 트랜잭션으로 묶음 |
+| `services/asset_*.py`(numbering 제외), `services/members.py` | 자산관리(ASSET-1): `asset_dates`(**KST `today_kst()` 유일 계산처**, 날짜 규칙 `validate_period`), `asset_no`(`SW-26-001` 채번, 수량 N), `asset_bulk`(입력 정리·금액 분할, 순수), `asset_registration`(등록·가져오기·가져오기 취소), `asset_assignment`(배정·회수·이관·이력수정·배정 취소), `asset_renewal`, `asset_status`, `asset_secret`(Fernet, 키 `ASSET_SECRET_KEY`), `asset_query`(목록·사용자별·대시보드 갱신 집계) |
 | `routers/` | `auth.py`, `meta.py`, `quotes.py`, `asset_products.py`/`asset_units.py`(구매관리), `assets.py`/`members.py`/`dashboard.py`(자산관리) — HTTP·권한·직렬화만, 로직은 services. 비밀번호 열람 판정 `deps.can_reveal_password`, 라이선스키 마스킹 `presenter.mask_license_key` 가 격리 지점 |
 
 라우트 등록 순서 주의: `GET /api/quotes/export.xlsx` 는 `GET /api/quotes/{quote_id}` **보다 먼저** 선언해야 한다. `/api/assets/` 아래 고정 경로(`export.xlsx`, `importable`, `import`, `import/cancel`, `renew`)도 `/{asset_no}` 보다 먼저.
@@ -62,9 +64,9 @@ firebase.json, firestore.rules, firestore.indexes.json   Firestore 에뮬레이�
 | `pages/Dashboard.tsx` | 로그인 후 첫 화면(`/dashboard`). 갱신 임박(D-30, 만료됨) KPI·갱신 캘린더·다가오는 갱신 일정은 `/api/dashboard/renewals` 실데이터(ASSET-1), 나머지 통계·예산·자산 현황은 **목업("예시" 표시)** |
 | `pages/Purchase*.tsx` | 구매관리(`/purchase`) |
 | `pages/Asset*.tsx`, `pages/Member*.tsx` | 자산관리(`/assets/{sw,hw,edu}`, `/assets/item/:assetNo`, `/assets/members`). 공용 컴포넌트 `components/{AssetTabs,AssetBadges,TargetPicker,Modal}.tsx`, KST 날짜 `lib/date.ts` |
-| `pages/Placeholder.tsx` | 계약관리(`/contract`) 등 아직 백엔드가 없는 사이드바 메뉴용 "준비 중" 화면 |
+| `pages/Placeholder.tsx` | 아직 백엔드가 없는 화면용 "준비 중" 화면 |
 
-사이드바 메뉴 구조(계약관리 그룹 하위 견적관리/구매관리/계약관리/자산관리)와 라우팅은 `design/Sidebar.tsx` 에서 관리 — 새 메뉴 추가 시 `CONTRACT_CHILDREN` 과 `App.tsx` 라우트를 함께 수정한다.
+사이드바 메뉴 구조(계약관리 그룹 하위 견적관리/구매관리/자산관리)와 라우팅은 `design/Sidebar.tsx` 에서 관리 — 새 메뉴 추가 시 `CONTRACT_CHILDREN` 과 `App.tsx` 라우트를 함께 수정한다.
 
 권한은 프론트 버튼 숨김이 아니라 **서버가 최종 방어선**. 새 쓰기 엔드포인트엔 `Depends(require_super_admin)` 필수.
 
