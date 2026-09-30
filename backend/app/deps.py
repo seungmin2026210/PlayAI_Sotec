@@ -9,7 +9,7 @@ from fastapi import Depends, Header
 from google.cloud import firestore
 
 from .auth import CurrentUser, resolve_token
-from .config import ROLE_GROUP_MANAGER, ROLE_SUPER_ADMIN
+from .config import ASSET_STATUS_DELETED, ROLE_GROUP_MANAGER, ROLE_SUPER_ADMIN
 from .database import get_client
 from .errors import FORBIDDEN_ROLE, NOT_AUTHENTICATED, NOT_FOUND, AppError
 from .models import Asset, AssetUnit, Member, Quote
@@ -60,8 +60,10 @@ def assert_can_view_asset_unit(unit: AssetUnit, user: CurrentUser) -> None:
 # --------------------------------------------------------------------------- ASSET-1
 def assert_can_view_asset(asset: Asset, user: CurrentUser) -> None:
     """그룹관리자는 `scope_group_code`(= 현재 사용자 그룹, 미사용·공용이면 등록 그룹 — D24)가
-    본인 그룹인 자산만. 타 그룹은 404(존재 은닉)."""
-    if user.role == ROLE_GROUP_MANAGER and asset.scope_group_code != user.group_code:
+    본인 그룹인 자산만. 타 그룹은 404(존재 은닉). 삭제된 자산(D47)은 전체관리자만."""
+    if user.role == ROLE_GROUP_MANAGER and (
+        asset.scope_group_code != user.group_code or asset.status == ASSET_STATUS_DELETED
+    ):
         raise AppError(NOT_FOUND, 404, "자산을 찾을 수 없습니다.")
 
 

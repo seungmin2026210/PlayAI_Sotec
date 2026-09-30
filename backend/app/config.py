@@ -209,12 +209,16 @@ ASSET_UNIT_TYPE_LABELS: dict[str, str] = {
 ASSET_STATUS_IDLE = "IDLE"          # 미사용
 ASSET_STATUS_IN_USE = "IN_USE"      # 사용 중
 ASSET_STATUS_DISPOSED = "DISPOSED"  # 폐기(soft delete)
+ASSET_STATUS_DELETED = "DELETED"    # 삭제(잘못 등록한 기록, soft delete — D47). 전체관리자만 조회
 
 ASSET_STATUS_LABELS: dict[str, str] = {
     ASSET_STATUS_IDLE: "미사용",
     ASSET_STATUS_IN_USE: "사용 중",
     ASSET_STATUS_DISPOSED: "폐기",
+    ASSET_STATUS_DELETED: "삭제됨",
 }
+# 기본 목록·대시보드에서 숨기는 상태(D26, D47). 둘 다 읽기전용.
+ASSET_HIDDEN_STATUSES = (ASSET_STATUS_DISPOSED, ASSET_STATUS_DELETED)
 
 # 자산관리 화면의 유형 표기(C6: 구매관리 라벨 "교육자산"은 그대로 두고 여기서만 "교육").
 ASSET_MENU_CATEGORY_LABELS: dict[str, str] = {"SW": "SW", "HW": "HW", "EDU": "교육"}

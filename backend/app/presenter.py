@@ -7,7 +7,7 @@ from .config import (
     ASSET_DISPOSED_REASON_LABELS,
     ASSET_LINK_LABELS,
     ASSET_MENU_CATEGORY_LABELS,
-    ASSET_STATUS_DISPOSED,
+    ASSET_HIDDEN_STATUSES,
     ASSET_STATUS_LABELS,
     ASSET_SUBCATEGORIES,
     ASSET_UNIT_STATUS_LABELS,
@@ -163,8 +163,8 @@ def mask_license_key(value: str | None, user: CurrentUser) -> str | None:
 
 
 def expiry_badge(asset: Asset) -> str | None:
-    """"EXPIRED" | "EXPIRING" | None — KST 오늘 기준(D21, D45). 폐기 자산엔 배지 없음."""
-    if asset.status == ASSET_STATUS_DISPOSED:
+    """"EXPIRED" | "EXPIRING" | None — KST 오늘 기준(D21, D45). 폐기·삭제 자산엔 배지 없음."""
+    if asset.status in ASSET_HIDDEN_STATUSES:
         return None
     st = expiry_state(asset.valid_to, today_kst())
     return st.upper() if st else None
@@ -210,7 +210,7 @@ def _asset_base(a: Asset, user: CurrentUser) -> dict:
         note=a.note,
         disposed_reason=a.disposed_reason,
         disposed_reason_label=ASSET_DISPOSED_REASON_LABELS.get(a.disposed_reason) if a.disposed_reason else None,
-        read_only=a.status == ASSET_STATUS_DISPOSED,
+        read_only=a.status in ASSET_HIDDEN_STATUSES,
     )
 
 
@@ -233,6 +233,9 @@ def to_asset_read(
     return AssetRead(
         **_asset_base(a, user),
         disposed_at=a.disposed_at,
+        deleted_at=a.deleted_at,
+        deleted_by=a.deleted_by,
+        deleted_reason=a.deleted_reason,
         created_at=a.created_at,
         created_by=a.created_by,
         updated_at=a.updated_at,

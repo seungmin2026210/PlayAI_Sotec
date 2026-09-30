@@ -238,7 +238,7 @@ export interface AssetUnitListFilters {
 }
 
 // --------------------------------------------------------------------------- ASSET-1
-export type AssetStatus = "IDLE" | "IN_USE" | "DISPOSED";
+export type AssetStatus = "IDLE" | "IN_USE" | "DISPOSED" | "DELETED";
 export type AssetLinkKind = "IMPORTED" | "RENEWED";
 export type ExpiryBadge = "EXPIRED" | "EXPIRING";
 
@@ -313,6 +313,9 @@ export interface AssetRenewal {
 
 export interface Asset extends AssetListItem {
   disposed_at: string | null;
+  deleted_at: string | null;
+  deleted_by: string | null;
+  deleted_reason: string | null;
   created_at: string | null;
   created_by: string | null;
   updated_at: string | null;

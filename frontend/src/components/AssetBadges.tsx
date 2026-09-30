@@ -1,6 +1,6 @@
 import type { AssetStatus, ExpiryBadge } from "../types";
 
-const STATUS_LABEL: Record<AssetStatus, string> = { IDLE: "미사용", IN_USE: "사용 중", DISPOSED: "폐기" };
+const STATUS_LABEL: Record<AssetStatus, string> = { IDLE: "미사용", IN_USE: "사용 중", DISPOSED: "폐기", DELETED: "삭제됨" };
 
 export function AssetStateBadge({ status }: { status: AssetStatus }) {
   return <span className={`badge badge-a-${status.toLowerCase()}`}>{STATUS_LABEL[status]}</span>;

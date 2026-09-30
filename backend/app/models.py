@@ -340,6 +340,9 @@ class Asset:
     note: str | None = None
     disposed_at: datetime | None = None
     disposed_reason: str | None = None
+    deleted_at: datetime | None = None
+    deleted_by: str | None = None
+    deleted_reason: str | None = None
     created_at: datetime | None = None
     created_by: str | None = None
     updated_at: datetime | None = None

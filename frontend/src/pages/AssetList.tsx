@@ -86,7 +86,7 @@ function AssetListInner({ category }: { category: AssetCategory }) {
   const sel = Object.values(selected);
   const renewable =
     sel.length > 0 &&
-    sel.every((a) => a.valid_to && a.valid_to === sel[0].valid_to && a.name === sel[0].name && a.status !== "DISPOSED");
+    sel.every((a) => a.valid_to && a.valid_to === sel[0].valid_to && a.name === sel[0].name && !a.read_only);
 
   function toggle(a: AssetListItem) {
     setSelected((cur) => {
@@ -181,10 +181,11 @@ function AssetListInner({ category }: { category: AssetCategory }) {
         <label>
           상태
           <select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })}>
-            <option value="">전체(폐기 제외)</option>
+            <option value="">전체(폐기·삭제 제외)</option>
             <option value="IDLE">미사용</option>
             <option value="IN_USE">사용 중</option>
             <option value="DISPOSED">폐기</option>
+            {isAdmin && <option value="DELETED">삭제됨</option>}
           </select>
         </label>
         <label>
@@ -278,14 +279,14 @@ function AssetListInner({ category }: { category: AssetCategory }) {
             )}
             {!loading &&
               data?.items.map((a) => (
-                <tr key={a.asset_no} className={a.status === "DISPOSED" ? "dim" : undefined}>
+                <tr key={a.asset_no} className={a.read_only ? "dim" : undefined}>
                   {isAdmin && (
                     <td>
                       <input
                         type="checkbox"
                         style={{ width: "auto" }}
                         checked={Boolean(selected[a.asset_no])}
-                        disabled={!a.valid_to || a.status === "DISPOSED"}
+                        disabled={!a.valid_to || a.read_only}
                         onChange={() => toggle(a)}
                       />
                     </td>

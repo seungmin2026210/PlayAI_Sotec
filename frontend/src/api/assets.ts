@@ -64,6 +64,10 @@ export function disposeAsset(assetNo: string): Promise<Asset> {
   return apiSend("POST", `/api/assets/${enc(assetNo)}/dispose`);
 }
 
+export function deleteAsset(assetNo: string, reason: string): Promise<Asset> {
+  return apiSend("POST", `/api/assets/${enc(assetNo)}/delete`, { reason });
+}
+
 export function assignAsset(assetNo: string, t: AssignTarget, startDate: string, note: string): Promise<Asset> {
   return apiSend("POST", `/api/assets/${enc(assetNo)}/assign`, { ...t, start_date: startDate, note });
 }
