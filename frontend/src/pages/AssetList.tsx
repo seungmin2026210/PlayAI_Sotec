@@ -226,26 +226,31 @@ function AssetListInner({ category }: { category: AssetCategory }) {
             </span>
           </div>
         )}
-        <div className="filter-actions">
+        <div className="filter-actions" style={{ justifyContent: "flex-end" }}>
           <button type="submit">검색</button>
           <button type="button" className="ghost" onClick={() => apply(fromParams(new URLSearchParams()))}>
             초기화
           </button>
-          <SuperAdminOnly>
-            <button
-              type="button"
-              className="primary"
-              disabled={!renewable}
-              title="같은 품명·같은 종료일 자산을 골라 한꺼번에 갱신"
-              onClick={() => setRenewOpen(true)}
-            >
-              갱신{sel.length ? ` (${sel.length}건)` : ""}
-            </button>
-          </SuperAdminOnly>
         </div>
       </form>
 
       <div className="card">
+        <SuperAdminOnly>
+          <div className="row-gap" style={{ justifyContent: "flex-end", alignItems: "center", marginBottom: 10 }}>
+            <span className="muted">
+              {sel.length ? `${sel.length}건 선택됨` : "같은 품명·같은 종료일 자산을 체크하면 한꺼번에 갱신할 수 있습니다."}
+            </span>
+            <button
+              type="button"
+              className="primary"
+              disabled={!renewable}
+              title={sel.length && !renewable ? "품명과 종료일이 같은 자산끼리만 갱신할 수 있습니다." : undefined}
+              onClick={() => setRenewOpen(true)}
+            >
+              갱신{sel.length ? ` (${sel.length}건)` : ""}
+            </button>
+          </div>
+        </SuperAdminOnly>
         <table className="list-table">
           <thead>
             <tr>
