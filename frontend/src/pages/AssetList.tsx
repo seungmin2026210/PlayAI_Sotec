@@ -102,7 +102,7 @@ function AssetListInner({ category }: { category: AssetCategory }) {
   const isAdmin = user?.role === "SUPER_ADMIN";
   const typedCol = category === "SW" ? "버전" : category === "HW" ? "모델명" : "강의명";
   const typedVal = (a: AssetListItem) => (category === "SW" ? a.version : category === "HW" ? a.model : a.course_title);
-  const colCount = 10 + (isAdmin ? 1 : 0);
+  const colCount = 9 + (isAdmin ? 1 : 0);
   const yearNow = new Date().getFullYear();
 
   return (
@@ -264,7 +264,6 @@ function AssetListInner({ category }: { category: AssetCategory }) {
               <th>유효기간 종료</th>
               <th>그룹</th>
               <th>상태</th>
-              <th />
             </tr>
           </thead>
           <tbody>
@@ -284,9 +283,13 @@ function AssetListInner({ category }: { category: AssetCategory }) {
             )}
             {!loading &&
               data?.items.map((a) => (
-                <tr key={a.asset_no} className={a.read_only ? "dim" : undefined}>
+                <tr
+                  key={a.asset_no}
+                  onClick={() => navigate(`/assets/item/${a.asset_no}`)}
+                  className={a.read_only ? "clickable dim" : "clickable"}
+                >
                   {isAdmin && (
-                    <td>
+                    <td onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         style={{ width: "auto" }}
@@ -297,7 +300,9 @@ function AssetListInner({ category }: { category: AssetCategory }) {
                     </td>
                   )}
                   <td>
-                    <Link to={`/assets/item/${a.asset_no}`}>{a.asset_no}</Link>
+                    <Link to={`/assets/item/${a.asset_no}`} onClick={(e) => e.stopPropagation()}>
+                      {a.asset_no}
+                    </Link>
                   </td>
                   <td>{a.subcategory_label ?? "-"}</td>
                   <td>{a.name}</td>
@@ -310,9 +315,6 @@ function AssetListInner({ category }: { category: AssetCategory }) {
                   <td>{a.scope_group_name}</td>
                   <td>
                     <AssetStateBadge status={a.status} />
-                  </td>
-                  <td>
-                    <Link to={`/assets/item/${a.asset_no}`}>상세</Link>
                   </td>
                 </tr>
               ))}
