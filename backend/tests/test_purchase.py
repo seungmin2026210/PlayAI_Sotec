@@ -125,6 +125,56 @@ def test_retire_twice_is_rejected(client, admin_headers):
 
 
 # --------------------------------------------------------------------------- 견적 연동 잠금
+# --------------------------------------------------------------------------- 수정
+def test_patch_unit_updates_fields(client, admin_headers):
+    product = _create_product(client, admin_headers)
+    unit_no = _create_unit(client, admin_headers, product["id"]).json()["unit_no"]
+
+    r = client.patch(
+        f"/api/asset-units/{unit_no}",
+        json={"price": 900000, "purchased_from": "새 구매처", "key_value": "new-key"},
+        headers=admin_headers,
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["price"] == 900000
+    assert body["purchased_from"] == "새 구매처"
+    assert body["key_value"] == "new-key"
+    assert body["updated_at"] is not None
+    assert body["unit_no"] == unit_no  # 번호는 그대로
+
+
+def test_patch_unit_does_not_delete_or_renumber(client, admin_headers):
+    """"삭제 후 재등록" 대신 수정으로 고치는 시나리오 — 번호가 안 바뀌는지 확인."""
+    product = _create_product(client, admin_headers)
+    unit_no = _create_unit(client, admin_headers, product["id"], price=100).json()["unit_no"]
+
+    r = client.patch(f"/api/asset-units/{unit_no}", json={"price": 500000}, headers=admin_headers)
+    assert r.status_code == 200
+    assert r.json()["unit_no"] == unit_no
+
+    detail = client.get(f"/api/asset-units/{unit_no}", headers=admin_headers)
+    assert detail.json()["price"] == 500000
+
+
+def test_patch_retired_unit_is_rejected(client, admin_headers):
+    product = _create_product(client, admin_headers)
+    unit_no = _create_unit(client, admin_headers, product["id"]).json()["unit_no"]
+    client.post(f"/api/asset-units/{unit_no}/retire", headers=admin_headers)
+
+    r = client.patch(f"/api/asset-units/{unit_no}", json={"price": 1}, headers=admin_headers)
+    assert r.status_code == 409
+    assert r.json()["detail"]["code"] == "ALREADY_RETIRED"
+
+
+def test_group_manager_cannot_patch_unit(client, admin_headers, manager_headers):
+    product = _create_product(client, admin_headers)
+    unit_no = _create_unit(client, admin_headers, product["id"]).json()["unit_no"]
+
+    r = client.patch(f"/api/asset-units/{unit_no}", json={"price": 1}, headers=manager_headers)
+    assert r.status_code == 403
+
+
 def test_unit_creation_locks_source_quote(client, admin_headers):
     quote = client.post("/api/quotes", json=sample_payload(), headers=admin_headers).json()
     assert quote["purchase_locked"] is False

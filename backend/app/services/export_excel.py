@@ -291,7 +291,11 @@ def build_asset_list_xlsx(category: str, items) -> bytes:
     for r, it in enumerate(items, start=2):
         for c, (_, attr, _) in enumerate(cols, start=1):
             if attr is None:
-                v = it.current_member_name or (f"공용 · {it.current_shared_label}" if it.current_shared_label else "")
+                v = it.current_member_name or (
+                    f"공용 · {it.current_shared_label}" if it.current_shared_label
+                    else f"타업체 제공 · {it.current_external_label}" if it.current_external_label
+                    else ""
+                )
             else:
                 v = getattr(it, attr)
             if attr == "expiry_badge":

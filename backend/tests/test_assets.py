@@ -38,8 +38,11 @@ def _member(client, h, no="Z001", name="김철수", group="A"):
     return no
 
 
-def _assign(client, h, asset_no, member_id=None, shared=None, start=None):
-    body = {"member_id": member_id, "shared_label": shared, "start_date": start or D(-10)}
+def _assign(client, h, asset_no, member_id=None, shared=None, external=None, start=None):
+    body = {
+        "member_id": member_id, "shared_label": shared, "external_label": external,
+        "start_date": start or D(-10),
+    }
     return client.post(f"/api/assets/{asset_no}/assign", json=body, headers=h)
 
 
@@ -180,11 +183,29 @@ def test_shared_assignment(client, admin_headers):
     assert [i["asset_no"] for i in listed["items"]] == [hw]
 
 
+def test_external_assignment(client, admin_headers):
+    """타업체 제공 — 공용과 동일 패턴이지만 별도 필드/라벨로 구분된다."""
+    hw = _one(client, admin_headers, category="HW", name="노트북", group_code="C")
+    a = _assign(client, admin_headers, hw, external="OO주식회사").json()
+    assert a["status"] == "IN_USE"
+    assert a["current_external_label"] == "OO주식회사"
+    assert a["current_shared_label"] is None
+    assert a["scope_group_code"] == "C"
+    listed = client.get("/api/assets?category=HW&member_id=EXTERNAL", headers=admin_headers).json()
+    assert [i["asset_no"] for i in listed["items"]] == [hw]
+
+    edu = _one(client, admin_headers, category="EDU", name="스프링")
+    r = _assign(client, admin_headers, edu, external="협력사")  # 교육 자산은 내부용 — 공용과 동일하게 차단
+    assert r.status_code == 400
+
+
 def test_member_or_shared_exactly_one(client, admin_headers):
     no = _one(client, admin_headers)
     _member(client, admin_headers)
     assert _assign(client, admin_headers, no).status_code == 400
     assert _assign(client, admin_headers, no, member_id="Z001", shared="x").status_code == 400
+    assert _assign(client, admin_headers, no, member_id="Z001", external="x").status_code == 400
+    assert _assign(client, admin_headers, no, shared="x", external="x").status_code == 400
 
 
 def test_inactive_member_cannot_be_assigned(client, admin_headers):

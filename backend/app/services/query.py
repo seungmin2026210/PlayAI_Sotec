@@ -15,6 +15,7 @@ from datetime import date
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 
+from ..config import STATUS_CLOSED
 from ..models import Quote
 
 
@@ -45,6 +46,11 @@ def list_quotes(
     q = q.order_by("created_at", direction=firestore.Query.DESCENDING)
 
     quotes = [Quote.from_doc(doc.id, doc.to_dict()) for doc in q.stream()]
+
+    # 종결(PURCHASE-1)은 상태를 명시적으로 요청했을 때만 보인다 — 기본 목록에서 계속
+    # 쌓이는 걸 막기 위한 수동 종결이라, 기본 화면엔 안 뜨고 필터로 찾아볼 수만 있게 한다.
+    if not status:
+        quotes = [x for x in quotes if x.status != STATUS_CLOSED]
 
     if mgmt_no:
         quotes = [x for x in quotes if mgmt_no in x.mgmt_no]

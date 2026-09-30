@@ -48,7 +48,7 @@ input, select {
   width: 100%;
 }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 15px; color: var(--muted); }
-label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--text); }
+label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--text); white-space: nowrap; flex: 0 0 auto; }
 
 /* 기존 상단바(Shell)는 design/AppShell.tsx 의 사이드바 레이아웃으로 대체됨 —
    app-bar/brand/who/role-tag 클래스와 전역 main{} 규칙은 여기서 제거. */
@@ -136,6 +136,7 @@ label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--
 .badge-approved { background: #dcfce7; color: #15803d; }
 .badge-rejected { background: #fee2e2; color: #b91c1c; }
 .badge-cancelled { background: #e5e7eb; color: #4b5563; }
+.badge-closed { background: #e0e7ff; color: #3730a3; }
 .badge-lock { background: #fef3c7; color: #92400e; }
 
 .badge-asset-available { background: #dcfce7; color: #15803d; }

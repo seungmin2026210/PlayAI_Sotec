@@ -124,6 +124,9 @@ def list_assets(
         if member_id == "SHARED":
             if not (a.status == ASSET_STATUS_IN_USE and a.current_shared_label):
                 return False
+        elif member_id == "EXTERNAL":
+            if not (a.status == ASSET_STATUS_IN_USE and a.current_external_label):
+                return False
         elif member_id and a.current_member_id != member_id:
             return False
         if expiry:

@@ -69,6 +69,7 @@ def to_quote_read(q: Quote) -> QuoteRead:
         rejected_at=q.rejected_at,
         cancelled_at=q.cancelled_at,
         locked_at=q.locked_at,
+        closed_at=q.closed_at,
         company=dict(COMPANY),
         items=[
             ItemOut(
@@ -187,6 +188,7 @@ def _asset_base(a: Asset, user: CurrentUser) -> dict:
         current_member_id=a.current_member_id,
         current_member_name=a.current_member_name,
         current_shared_label=a.current_shared_label,
+        current_external_label=a.current_external_label,
         current_start_date=a.current_start_date,
         purchase_date=a.purchase_date,
         price=a.price,
@@ -222,6 +224,7 @@ def to_assignment_read(x: AssetAssignment) -> AssignmentRead:
     return AssignmentRead(
         id=x.id, asset_no=x.asset_no, category=x.category, asset_name=x.asset_name,
         member_id=x.member_id, member_name=x.member_name, shared_label=x.shared_label,
+        external_label=x.external_label,
         start_date=x.start_date, end_date=x.end_date, note=x.note,
         created_by=x.created_by, updated_at=x.updated_at, updated_by=x.updated_by,
     )

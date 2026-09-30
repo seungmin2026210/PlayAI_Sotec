@@ -317,6 +317,7 @@ def assign(
 ) -> AssetRead:
     asset_assignment.assign(
         client, asset_no, member_id=body.member_id, shared_label=body.shared_label,
+        external_label=body.external_label,
         start_date=body.start_date.isoformat(), note=body.note, user=user,
     )
     return _detail(client, asset_no, user)
@@ -342,6 +343,7 @@ def transfer(
 ) -> AssetRead:
     asset_assignment.transfer(
         client, asset_no, member_id=body.member_id, shared_label=body.shared_label,
+        external_label=body.external_label,
         date=body.date.isoformat(), note=body.note, user=user,
     )
     return _detail(client, asset_no, user)

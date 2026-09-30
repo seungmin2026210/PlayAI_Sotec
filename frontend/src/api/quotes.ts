@@ -43,6 +43,10 @@ export function purchaseLockQuote(id: string): Promise<Quote> {
   return apiSend<Quote>("POST", `/api/quotes/${id}/purchase-lock`);
 }
 
+export function closeQuote(id: string): Promise<Quote> {
+  return apiSend<Quote>("POST", `/api/quotes/${id}/close`);
+}
+
 export function sendQuote(id: string): Promise<MessageResponse> {
   return apiSend<MessageResponse>("POST", `/api/quotes/${id}/send`);
 }

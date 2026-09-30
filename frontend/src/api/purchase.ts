@@ -7,6 +7,7 @@ import type {
   AssetUnit,
   AssetUnitListFilters,
   AssetUnitListResponse,
+  AssetUnitPatchPayload,
   AssetUnitPayload,
 } from "../types";
 
@@ -38,6 +39,10 @@ export function getAssetUnit(unitNo: string): Promise<AssetUnit> {
 
 export function createAssetUnit(payload: AssetUnitPayload): Promise<AssetUnit> {
   return apiSend<AssetUnit>("POST", "/api/asset-units", payload);
+}
+
+export function patchAssetUnit(unitNo: string, payload: AssetUnitPatchPayload): Promise<AssetUnit> {
+  return apiSend<AssetUnit>("PATCH", `/api/asset-units/${encodeURIComponent(unitNo)}`, payload);
 }
 
 export function retireAssetUnit(unitNo: string): Promise<AssetUnit> {

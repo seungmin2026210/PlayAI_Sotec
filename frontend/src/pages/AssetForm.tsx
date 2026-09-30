@@ -5,6 +5,7 @@ import { ApiError } from "../api/client";
 import { useMeta } from "../hooks/useMeta";
 import { useToast } from "../components/Toast";
 import { CATEGORY_LABEL, categoryPath, slugToCategory } from "../components/AssetTabs";
+import { MoneyInput } from "../components/MoneyInput";
 import type { Asset, AssetCategory, AssetFields, AssetUnit } from "../types";
 
 const BLANK: AssetFields = {
@@ -216,12 +217,7 @@ export function AssetForm({ mode }: { mode: "create" | "edit" }) {
             </label>
             <label>
               {unitNo ? "구매 총액 (원, 수량으로 나눠 기록)" : "금액 (원)"}
-              <input
-                type="number"
-                min={0}
-                value={form.price ?? ""}
-                onChange={(e) => set("price", e.target.value === "" ? null : Number(e.target.value))}
-              />
+              <MoneyInput value={form.price} onChange={(v) => set("price", v || null)} />
             </label>
             {text("purchased_from", "구매처")}
             {text("quote_no", "견적번호")}

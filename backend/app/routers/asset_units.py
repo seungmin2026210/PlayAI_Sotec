@@ -17,7 +17,7 @@ from ..deps import assert_can_view_asset_unit, get_current_user, get_db, require
 from ..errors import ALREADY_RETIRED, NOT_FOUND, PRODUCT_INACTIVE, AppError
 from ..models import AssetProduct, AssetUnit, Quote
 from ..presenter import to_asset_unit_list_item, to_asset_unit_read
-from ..schemas import AssetUnitCreate, AssetUnitListResponse, AssetUnitRead
+from ..schemas import AssetUnitCreate, AssetUnitListResponse, AssetUnitPatch, AssetUnitRead
 from ..services import asset_numbering
 from ..services.asset_query import list_asset_units as query_asset_units
 from ..services.status import apply_purchase_lock
@@ -139,6 +139,32 @@ def get_asset_unit(
     user: CurrentUser = Depends(get_current_user),
 ) -> AssetUnitRead:
     return to_asset_unit_read(_load_unit_or_404(client, unit_no, user))
+
+
+# --------------------------------------------------------------------------- update
+@router.patch("/{unit_no}", response_model=AssetUnitRead)
+def patch_asset_unit(
+    unit_no: str,
+    body: AssetUnitPatch,
+    client: firestore.Client = Depends(get_db),
+    user: CurrentUser = Depends(require_super_admin),
+) -> AssetUnitRead:
+    """구매 정보 수정. 삭제는 없음(번호 영구 보존 원칙) — 잘못 등록했으면 여기서 고친다.
+    상품·유닛번호·연동 견적서는 바꾸지 않는다. 이미 폐기된 유닛은 수정도 막는다."""
+    unit = _load_unit_or_404(client, unit_no, user)
+    if unit.status == ASSET_UNIT_STATUS_EXPIRED:
+        raise AppError(ALREADY_RETIRED, 409, "폐기된 자산은 수정할 수 없습니다.")
+
+    changes = body.model_dump(exclude_unset=True)
+    for field, value in changes.items():
+        setattr(unit, field, value)
+    unit.updated_at = _now()
+
+    # AssetUnit.to_dict() 저장 규칙과 동일하게 date 필드는 isoformat 문자열로 변환해서 씀
+    date_fields = {"purchase_date", "expire_date"}
+    stored = {k: (v.isoformat() if k in date_fields and v is not None else v) for k, v in changes.items()}
+    client.collection("asset_units").document(unit_no).update({**stored, "updated_at": unit.updated_at})
+    return to_asset_unit_read(unit)
 
 
 # --------------------------------------------------------------------------- retire

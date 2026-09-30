@@ -104,3 +104,64 @@ def test_purchase_lock_is_idempotent(client, admin_headers):
     client.post(f"/api/quotes/{q['id']}/purchase-lock", headers=admin_headers)
     r = client.post(f"/api/quotes/{q['id']}/purchase-lock", headers=admin_headers)
     assert r.status_code == 200
+
+
+# --------------------------------------------------------------------------- 종결(PURCHASE-1)
+def test_close_requires_approved(client, admin_headers):
+    q = _create(client, admin_headers)  # SUBMITTED 상태
+    r = client.post(f"/api/quotes/{q['id']}/close", headers=admin_headers)
+    assert r.status_code == 409
+    assert r.json()["detail"]["code"] == "INVALID_TRANSITION"
+
+
+def test_close_approved_quote(client, admin_headers):
+    q = _create(client, admin_headers)
+    client.post(f"/api/quotes/{q['id']}/approve", headers=admin_headers)
+
+    r = client.post(f"/api/quotes/{q['id']}/close", headers=admin_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "CLOSED"
+    assert body["status_label"] == "종결"
+    assert body["closed_at"] is not None
+    assert body["read_only"] is True  # 이미 승인됨이라 원래 읽기전용
+
+
+def test_closed_quote_hidden_from_default_list_but_findable_by_status(client, admin_headers):
+    q = _create(client, admin_headers)
+    client.post(f"/api/quotes/{q['id']}/approve", headers=admin_headers)
+    client.post(f"/api/quotes/{q['id']}/close", headers=admin_headers)
+
+    default_list = client.get("/api/quotes", headers=admin_headers).json()
+    assert q["id"] not in [x["id"] for x in default_list["items"]]
+
+    closed_list = client.get("/api/quotes?status=CLOSED", headers=admin_headers).json()
+    assert q["id"] in [x["id"] for x in closed_list["items"]]
+
+
+def test_close_still_exportable(client, admin_headers):
+    """CLOSED 는 승인 문서 자체는 그대로라 계속 export 가능해야 한다."""
+    q = _create(client, admin_headers)
+    client.post(f"/api/quotes/{q['id']}/approve", headers=admin_headers)
+    client.post(f"/api/quotes/{q['id']}/close", headers=admin_headers)
+
+    r = client.get(f"/api/quotes/{q['id']}/export.xlsx", headers=admin_headers)
+    assert r.status_code == 200
+
+
+def test_closed_quote_cannot_close_again(client, admin_headers):
+    q = _create(client, admin_headers)
+    client.post(f"/api/quotes/{q['id']}/approve", headers=admin_headers)
+    client.post(f"/api/quotes/{q['id']}/close", headers=admin_headers)
+
+    r = client.post(f"/api/quotes/{q['id']}/close", headers=admin_headers)
+    assert r.status_code == 409
+    assert r.json()["detail"]["code"] == "INVALID_TRANSITION"
+
+
+def test_group_manager_cannot_close(client, admin_headers, manager_headers):
+    q = _create(client, admin_headers)
+    client.post(f"/api/quotes/{q['id']}/approve", headers=admin_headers)
+
+    r = client.post(f"/api/quotes/{q['id']}/close", headers=manager_headers)
+    assert r.status_code == 403

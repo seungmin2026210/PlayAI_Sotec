@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from ..config import (
     STATUS_APPROVED,
     STATUS_CANCELLED,
+    STATUS_CLOSED,
     STATUS_REJECTED,
     STATUS_SUBMITTED,
 )
@@ -18,13 +19,16 @@ from ..errors import (
 )
 from ..models import Quote
 
-TERMINAL_STATUSES = frozenset({STATUS_APPROVED, STATUS_REJECTED, STATUS_CANCELLED})
+TERMINAL_STATUSES = frozenset({STATUS_APPROVED, STATUS_REJECTED, STATUS_CANCELLED, STATUS_CLOSED})
 
 # (from_status, action) -> to_status
 ALLOWED: dict[tuple[str, str], str] = {
     (STATUS_SUBMITTED, "approve"): STATUS_APPROVED,
     (STATUS_SUBMITTED, "reject"): STATUS_REJECTED,
     (STATUS_SUBMITTED, "cancel"): STATUS_CANCELLED,
+    # 종결: 승인됨 상태에서만, 수동 액션(PURCHASE-1) — 더 이상 이 견적서로 구매하지 않을 때.
+    # APPROVED 는 이미 TERMINAL(읽기전용)이라 권한/수정 로직은 안 바뀌고, 목록 기본 노출만 바뀐다.
+    (STATUS_APPROVED, "close"): STATUS_CLOSED,
 }
 
 
@@ -58,8 +62,9 @@ def guard_mutable(quote: Quote) -> None:
 
 
 def guard_exportable(quote: Quote) -> None:
-    """개별 엑셀/PDF export 선행 검사. 승인된(APPROVED) 견적서만 정식 문서로 내보낼 수 있다."""
-    if quote.status != STATUS_APPROVED:
+    """개별 엑셀/PDF export 선행 검사. 승인된(APPROVED) 견적서만 정식 문서로 내보낼 수 있다.
+    종결(CLOSED)은 승인됨에서 구매를 그만 받기로 한 것뿐 — 승인 문서 자체는 그대로라 계속 내보낼 수 있다."""
+    if quote.status not in (STATUS_APPROVED, STATUS_CLOSED):
         raise AppError(
             EXPORT_NOT_APPROVED,
             409,
@@ -89,6 +94,8 @@ def apply_transition(quote: Quote, action: str, *, reason: str | None = None) ->
         quote.rejected_at = now
     elif action == "cancel":
         quote.cancelled_at = now
+    elif action == "close":
+        quote.closed_at = now
 
 
 def apply_purchase_lock(quote: Quote) -> bool:

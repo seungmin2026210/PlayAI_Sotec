@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { createAssetUnit, listAssetProducts } from "../api/purchase";
+import { useNavigate, useParams } from "react-router-dom";
+import { createAssetUnit, getAssetUnit, listAssetProducts, patchAssetUnit } from "../api/purchase";
 import { listQuotes } from "../api/quotes";
 import { ApiError } from "../api/client";
 import { useMeta } from "../hooks/useMeta";
 import { useToast } from "../components/Toast";
+import { MoneyInput } from "../components/MoneyInput";
 import type { AssetProduct, AssetUnitPayload, AssetUnitType, QuoteListItem } from "../types";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -21,7 +22,8 @@ const BLANK: AssetUnitPayload = {
   source_quote_id: null,
 };
 
-export function PurchaseForm() {
+export function PurchaseForm({ mode }: { mode: "create" | "edit" }) {
+  const { unitNo } = useParams();
   const navigate = useNavigate();
   const meta = useMeta();
   const toast = useToast();
@@ -29,22 +31,57 @@ export function PurchaseForm() {
   const [products, setProducts] = useState<AssetProduct[]>([]);
   const [approvedQuotes, setApprovedQuotes] = useState<QuoteListItem[]>([]);
   const [form, setForm] = useState<AssetUnitPayload>(BLANK);
+  const [loading, setLoading] = useState(mode === "edit");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    listAssetProducts(true)
+    listAssetProducts(mode === "create" ? true : undefined)
       .then((r) => {
         setProducts(r.items);
-        if (r.items.length > 0) setForm((f) => ({ ...f, product_id: f.product_id || r.items[0].id }));
+        if (mode === "create" && r.items.length > 0) {
+          setForm((f) => ({ ...f, product_id: f.product_id || r.items[0].id }));
+        }
       })
       .catch((err) => toast.show(err instanceof ApiError ? err.message : "상품 목록을 불러오지 못했습니다.", "error"));
-    listQuotes({ status: "APPROVED", page: 1, size: 100 })
-      .then((r) => setApprovedQuotes(r.items))
-      .catch(() => {
-        /* 견적 연동은 선택사항 — 실패해도 폼은 계속 사용 가능 */
-      });
-  }, [toast]);
+    if (mode === "create") {
+      listQuotes({ status: "APPROVED", page: 1, size: 100 })
+        .then((r) => setApprovedQuotes(r.items))
+        .catch(() => {
+          /* 견적 연동은 선택사항 — 실패해도 폼은 계속 사용 가능 */
+        });
+    }
+  }, [mode, toast]);
+
+  useEffect(() => {
+    if (mode !== "edit" || !unitNo) return;
+    let alive = true;
+    getAssetUnit(unitNo)
+      .then((u) => {
+        if (!alive) return;
+        if (u.status === "EXPIRED") {
+          toast.show("폐기된 자산은 수정할 수 없습니다.", "error");
+          navigate(`/purchase/${u.id}`, { replace: true });
+          return;
+        }
+        setForm({
+          product_id: u.product_id,
+          purchase_date: u.purchase_date,
+          purchased_from: u.purchased_from ?? "",
+          price: u.price,
+          unit_type: u.unit_type,
+          key_value: u.key_value ?? "",
+          expire_date: u.expire_date,
+          group_code: u.group_code,
+          source_quote_id: u.source_quote_id,
+        });
+      })
+      .catch((err) => toast.show(err instanceof ApiError ? err.message : "불러오기 실패", "error"))
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [mode, unitNo, navigate, toast]);
 
   const selectedProduct = products.find((p) => p.id === form.product_id);
   const showUnitType = selectedProduct?.asset_category === "SW";
@@ -68,19 +105,33 @@ export function PurchaseForm() {
     }
     setError(null);
     setBusy(true);
-    const payload: AssetUnitPayload = {
-      ...form,
-      price: Number(form.price),
-      purchased_from: form.purchased_from || null,
-      key_value: form.key_value || null,
-      unit_type: showUnitType ? form.unit_type : null,
-      expire_date: form.expire_date || null,
-      source_quote_id: form.source_quote_id || null,
-    };
     try {
-      const unit = await createAssetUnit(payload);
-      toast.show(`등록 완료 · 유닛번호 ${unit.unit_no}`, "success");
-      navigate(`/purchase/${unit.id}`, { replace: true });
+      if (mode === "create") {
+        const payload: AssetUnitPayload = {
+          ...form,
+          price: Number(form.price),
+          purchased_from: form.purchased_from || null,
+          key_value: form.key_value || null,
+          unit_type: showUnitType ? form.unit_type : null,
+          expire_date: form.expire_date || null,
+          source_quote_id: form.source_quote_id || null,
+        };
+        const unit = await createAssetUnit(payload);
+        toast.show(`등록 완료 · 유닛번호 ${unit.unit_no}`, "success");
+        navigate(`/purchase/${unit.id}`, { replace: true });
+      } else {
+        const unit = await patchAssetUnit(unitNo!, {
+          purchase_date: form.purchase_date,
+          purchased_from: form.purchased_from || null,
+          price: Number(form.price),
+          unit_type: showUnitType ? form.unit_type : null,
+          key_value: form.key_value || null,
+          expire_date: form.expire_date || null,
+          group_code: form.group_code,
+        });
+        toast.show("수정 완료", "success");
+        navigate(`/purchase/${unit.id}`, { replace: true });
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "저장에 실패했습니다.");
     } finally {
@@ -88,10 +139,12 @@ export function PurchaseForm() {
     }
   }
 
+  if (loading) return <div className="page">불러오는 중…</div>;
+
   return (
     <div className="page page-full">
       <div className="page-head">
-        <h1>신규 구매 등록</h1>
+        <h1>{mode === "create" ? "신규 구매 등록" : `구매 정보 수정 (${unitNo})`}</h1>
         <button className="ghost" onClick={() => navigate(-1)}>
           취소
         </button>
@@ -103,7 +156,11 @@ export function PurchaseForm() {
           <div className="grid-2">
             <label>
               상품 *
-              <select value={form.product_id} onChange={(e) => set("product_id", e.target.value)}>
+              <select
+                value={form.product_id}
+                disabled={mode === "edit"}
+                onChange={(e) => set("product_id", e.target.value)}
+              >
                 {products.length === 0 && <option value="">등록된 상품 없음</option>}
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -111,6 +168,7 @@ export function PurchaseForm() {
                   </option>
                 ))}
               </select>
+              {mode === "edit" && <span className="hint">상품은 등록 후 바꿀 수 없습니다(번호가 상품명 기준이라).</span>}
             </label>
             <label>
               그룹 *
@@ -139,12 +197,7 @@ export function PurchaseForm() {
             </label>
             <label>
               금액 (원) *
-              <input
-                type="number"
-                min={1}
-                value={form.price || ""}
-                onChange={(e) => set("price", Number(e.target.value))}
-              />
+              <MoneyInput value={form.price} onChange={(v) => set("price", v)} />
             </label>
             <label>
               만료일 (선택, 비우면 무기한)
@@ -194,33 +247,35 @@ export function PurchaseForm() {
           )}
         </div>
 
-        <div className="card">
-          <h2>견적 연동 (선택)</h2>
-          <p className="muted">
-            승인된 견적서에서 이어서 구매하는 경우 선택하세요. 선택 시 해당 견적서가 자동으로
-            잠깁니다(이후 수정 불가).
-          </p>
-          <label>
-            연동 견적서
-            <select
-              value={form.source_quote_id ?? ""}
-              onChange={(e) => set("source_quote_id", e.target.value || null)}
-            >
-              <option value="">선택 안 함</option>
-              {approvedQuotes.map((q) => (
-                <option key={q.id} value={q.id}>
-                  {q.mgmt_no} · {q.title}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+        {mode === "create" && (
+          <div className="card">
+            <h2>견적 연동 (선택)</h2>
+            <p className="muted">
+              승인된 견적서에서 이어서 구매하는 경우 선택하세요. 선택 시 해당 견적서가 자동으로
+              잠깁니다(이후 수정 불가).
+            </p>
+            <label>
+              연동 견적서
+              <select
+                value={form.source_quote_id ?? ""}
+                onChange={(e) => set("source_quote_id", e.target.value || null)}
+              >
+                <option value="">선택 안 함</option>
+                {approvedQuotes.map((q) => (
+                  <option key={q.id} value={q.id}>
+                    {q.mgmt_no} · {q.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
 
         {error && <div className="form-error">{error}</div>}
 
         <div className="row-gap" style={{ marginTop: 15, justifyContent: "flex-end" }}>
           <button type="submit" className="primary" disabled={busy || products.length === 0}>
-            {busy ? "저장 중…" : "등록"}
+            {busy ? "저장 중…" : mode === "create" ? "등록" : "수정 저장"}
           </button>
           <button type="button" className="ghost" onClick={() => navigate(-1)}>
             취소

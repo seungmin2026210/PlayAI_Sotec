@@ -99,6 +99,48 @@ python -m pytest tests/test_purchase.py -v
 **알려진 개선 포인트(치명적이지 않음)**: SW 상품인데 유닛 타입(키/계정)을 선택하지 않고
 등록해도 현재는 막지 않는다 — 실사용하면서 필수로 강제할지 결정.
 
+## 사용성 피드백 반영 (2026-09-30)
+
+실사용 피드백: 잘못 등록한 구매 정보를 고칠 방법이 없어 "삭제 후 재등록"을 시도했지만
+애초에 삭제 자체가 없어서(번호 영구보존 원칙) 막힌 사례. 이걸 계기로 두 가지 추가:
+
+- **`PATCH /api/asset-units/{unit_no}`** — 구매 유닛 수정. 삭제는 여전히 없음(번호 영구보존
+  유지) — 대신 수정으로 고친다. 상품(`product_id`)·유닛번호·연동 견적서는 바꾸지 않음(번호가
+  상품명 기준이라 상품이 바뀌면 어긋남). 폐기(`EXPIRED`)된 유닛은 수정도 막는다(전체관리자만,
+  `require_super_admin`). 프론트: `PurchaseForm`을 create/edit 겸용으로 바꾸고 `PurchaseDetail`에
+  "수정" 버튼 추가.
+- **금액 입력 콤마 포맷팅** — `components/MoneyInput.tsx` 신규(타이핑 중 실시간 천단위 콤마,
+  `lib/money.parseWon`으로 역파싱). 구매관리 등록/수정뿐 아니라 견적서 항목 입력
+  (`ItemsEditor`)과 자산관리 등록(`AssetForm`, ASSET-1)까지 전부 적용 — "금액 입력은 어디서든
+  일관되게" 라는 피드백이라 PURCHASE-1 범위를 넘어 프로젝트 전체 금액 입력 필드에 반영했다.
+
+## 견적서 "종결" 상태 추가 (2026-09-30, QUOTE-1 상태 머신 확장)
+
+배경: 구매관리를 실사용하면서 "승인된 견적서가 계속 쌓이면 목록이 길어져서 보기 불편하다"는
+피드백. 처음엔 "이 견적서로 등록된 자산 합계가 견적 금액을 다 채우면 자동 종결"하는 방향을
+검토했으나(자산의 `quote_no`가 항상 실제 견적서 ID라는 보장이 없어 신뢰성 문제도 있었음),
+논의 끝에 **수동 종결 버튼**으로 단순화했다 — "더 이상 이 견적서로 구매하지 않을 때" 전체관리자가
+직접 누르는 액션.
+
+- `config.STATUS_CLOSED`("CLOSED"/"종결") 추가. `services/status.py`의 `TERMINAL_STATUSES`에
+  포함(이미 `APPROVED`가 읽기전용이라 권한/수정 로직에는 변화 없음 — 목록 노출만 바뀜).
+  `ALLOWED`에 `(APPROVED, "close") -> CLOSED` 전이 추가, `Quote.closed_at` 필드 신규.
+- `POST /api/quotes/{id}/close`(전체관리자만) — `routers/quotes.py`.
+- `services/query.py: list_quotes` — **`status` 필터를 명시적으로 안 준 기본 목록 조회에서만**
+  `CLOSED`를 제외. 상태 필터를 `CLOSED`로 지정하면 그대로 조회됨(완전히 숨기지 않고 필터로
+  찾아볼 수 있게 — 감사·확인 목적).
+  `guard_exportable`은 `APPROVED`뿐 아니라 `CLOSED`도 허용(승인 문서 자체는 그대로라 export는
+  계속 가능해야 함 — 처음 구현 때 빠뜨렸다가 리뷰 중 수정).
+- 프론트: `QuoteDetail`에 "종결" 버튼(APPROVED일 때만), 엑셀/PDF 버튼은 `APPROVED`뿐 아니라
+  `CLOSED`에서도 노출(`canExport`). `QuoteList`의 상태 필터 드롭다운은 `meta.statuses`를 그대로
+  쓰므로 코드 변경 없이 "종결"이 자동으로 옵션에 추가됨.
+- **부수 효과(의도된 것)**: 견적 종결 시 상태가 `APPROVED`가 아니게 되므로, 구매관리
+  "연동 견적서" 드롭다운(`status=APPROVED`만 조회)에서 자동으로 빠진다 — 별도 코드 없이
+  "종결된 견적서로는 더 이상 새로 구매 연동을 못 한다"가 자연스럽게 성립.
+- 테스트: `backend/tests/test_status.py`에 6개 추가(전이 제약, 목록 숨김/필터 조회, export
+  가능 확인, 중복 종결 차단, 권한). `backend/tests/test_purchase.py`에 PATCH 관련 4개 추가.
+  전체 **111개 전부 통과**.
+
 ## 남은 작업
 
 1. ~~프론트엔드(`/purchase` 라우트)~~ — 완료.

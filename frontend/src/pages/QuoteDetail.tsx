@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   approveQuote,
   cancelQuote,
+  closeQuote,
   deleteQuote,
   downloadQuotePdf,
   downloadQuoteXlsx,
@@ -105,6 +106,7 @@ export function QuoteDetail() {
   const canCancel = quote.status === "SUBMITTED" && !quote.purchase_locked;
   const canEditDelete = !quote.read_only;
   const isApproved = quote.status === "APPROVED";
+  const canExport = isApproved || quote.status === "CLOSED"; // 종결돼도 승인 문서 자체는 그대로 export 가능
 
   return (
     <div className="page page-full">
@@ -121,7 +123,7 @@ export function QuoteDetail() {
           </p>
         </div>
         <div className="head-actions">
-          {isApproved && (
+          {canExport && (
             <>
               <button onClick={() => dl(() => downloadQuoteXlsx(quoteId))}>엑셀</button>
               <button onClick={() => dl(() => downloadQuotePdf(quoteId))}>PDF</button>
@@ -281,6 +283,15 @@ export function QuoteDetail() {
               }
             >
               구매관리 반영(잠금)
+            </button>
+          )}
+          {isApproved && (
+            <button
+              disabled={busy}
+              title="더 이상 이 견적서로 구매하지 않을 때 — 목록 기본 화면에서 빠집니다(상태 필터로 다시 찾을 수 있음)"
+              onClick={() => run(() => closeQuote(quoteId), "종결 처리했습니다.")}
+            >
+              종결
             </button>
           )}
           {canEditDelete && (

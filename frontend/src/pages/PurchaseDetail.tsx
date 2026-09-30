@@ -72,9 +72,14 @@ export function PurchaseDetail() {
         <div className="head-actions">
           <SuperAdminOnly>
             {unit.status !== "EXPIRED" && (
-              <button className="danger" disabled={busy} onClick={onRetire}>
-                폐기 처리
-              </button>
+              <>
+                <button disabled={busy} onClick={() => navigate(`/purchase/${id}/edit`)}>
+                  수정
+                </button>
+                <button className="danger" disabled={busy} onClick={onRetire}>
+                  폐기 처리
+                </button>
+              </>
             )}
           </SuperAdminOnly>
           <button className="ghost" onClick={() => navigate("/purchase")}>

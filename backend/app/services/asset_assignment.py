@@ -55,26 +55,35 @@ class _Target:
     member_id: str | None
     member_name: str | None
     shared_label: str | None
+    external_label: str | None
     scope_group_code: str
 
 
-def _resolve_target_in(txn, client, asset: Asset, member_id: str | None, shared_label: str | None) -> _Target:
-    """배정 대상 = 팀원 또는 공용(D33) 중 정확히 하나."""
+def _resolve_target_in(
+    txn, client, asset: Asset, member_id: str | None, shared_label: str | None, external_label: str | None = None
+) -> _Target:
+    """배정 대상 = 팀원 · 공용(D33) · 타업체 제공(D33-1) 중 정확히 하나.
+    교육 자산은 내부용이라 공용·타업체 제공 둘 다 불가 — 팀원에게만 배정."""
     shared_label = (shared_label or "").strip() or None
+    external_label = (external_label or "").strip() or None
     member_id = (member_id or "").strip() or None
-    if bool(member_id) == bool(shared_label):
-        raise validation("팀원 또는 공용(장소/용도) 중 하나만 지정해야 합니다.")
+    if sum(bool(x) for x in (member_id, shared_label, external_label)) != 1:
+        raise validation("팀원 · 공용(장소/용도) · 타업체 제공 중 하나만 지정해야 합니다.")
     if shared_label:
         if asset.category == "EDU":
             raise validation("교육 자산은 공용으로 배정할 수 없습니다.")
-        return _Target(None, None, shared_label, asset.group_code)
+        return _Target(None, None, shared_label, None, asset.group_code)
+    if external_label:
+        if asset.category == "EDU":
+            raise validation("교육 자산은 내부용이라 타업체에 제공할 수 없습니다.")
+        return _Target(None, None, None, external_label, asset.group_code)
     snap = client.collection("members").document(member_id).get(transaction=txn)
     if not snap.exists:
         raise AppError(NOT_FOUND, 404, "팀원을 찾을 수 없습니다.")
     member = Member.from_doc(snap.to_dict())
     if not member.active:
         raise AppError(MEMBER_INACTIVE, 409, f"퇴사 처리된 팀원({member.name})에게는 배정할 수 없습니다.")
-    return _Target(member.employee_no, member.name, None, member.group_code)
+    return _Target(member.employee_no, member.name, None, None, member.group_code)
 
 
 def _current_fields(t: _Target, assignment_id: str, start_date: str) -> dict:
@@ -83,6 +92,7 @@ def _current_fields(t: _Target, assignment_id: str, start_date: str) -> dict:
         "current_member_id": t.member_id,
         "current_member_name": t.member_name,
         "current_shared_label": t.shared_label,
+        "current_external_label": t.external_label,
         "current_assignment_id": assignment_id,
         "current_start_date": start_date,
         "scope_group_code": t.scope_group_code,
@@ -95,6 +105,7 @@ def _idle_fields(asset: Asset) -> dict:
         "current_member_id": None,
         "current_member_name": None,
         "current_shared_label": None,
+        "current_external_label": None,
         "current_assignment_id": None,
         "current_start_date": None,
         "scope_group_code": asset.group_code,
@@ -110,6 +121,7 @@ def _new_assignment(asset: Asset, t: _Target, start: str, note: str | None, user
         member_id=t.member_id,
         member_name=t.member_name,
         shared_label=t.shared_label,
+        external_label=t.external_label,
         start_date=start,
         end_date=None,
         prev_assignment_id=prev_id,
@@ -122,13 +134,15 @@ def _new_assignment(asset: Asset, t: _Target, start: str, note: str | None, user
 
 
 # --------------------------------------------------------------------------- § 8-3 배정
-def assign(client, asset_no: str, *, member_id, shared_label, start_date: str, note, user: CurrentUser) -> None:
+def assign(
+    client, asset_no: str, *, member_id, shared_label, external_label=None, start_date: str, note, user: CurrentUser
+) -> None:
     now = _now()
 
     def _txn(txn):
         ref, asset = load_asset_in(txn, client, asset_no)
         guard_idle(asset)
-        target = _resolve_target_in(txn, client, asset, member_id, shared_label)
+        target = _resolve_target_in(txn, client, asset, member_id, shared_label, external_label)
         validate_period(start_date, None, _periods_in(txn, client, asset_no))
         new_ref = client.collection("asset_assignments").document()
         txn.set(new_ref, _new_assignment(asset, target, start_date, note, user, now))
@@ -156,15 +170,19 @@ def return_asset(client, asset_no: str, *, end_date: str, note, user: CurrentUse
 
 
 # --------------------------------------------------------------------------- § 8-5 사용자 변경(이관)
-def transfer(client, asset_no: str, *, member_id, shared_label, date: str, note, user: CurrentUser) -> None:
+def transfer(
+    client, asset_no: str, *, member_id, shared_label, external_label=None, date: str, note, user: CurrentUser
+) -> None:
     now = _now()
 
     def _txn(txn):
         ref, asset = load_asset_in(txn, client, asset_no)
         guard_in_use(asset)
         cur_ref, cur = _load_assignment_in(txn, client, asset.current_assignment_id)
-        target = _resolve_target_in(txn, client, asset, member_id, shared_label)
-        if (target.member_id, target.shared_label) == (cur.member_id, cur.shared_label):
+        target = _resolve_target_in(txn, client, asset, member_id, shared_label, external_label)
+        if (target.member_id, target.shared_label, target.external_label) == (
+            cur.member_id, cur.shared_label, cur.external_label,
+        ):
             raise validation("현재 사용자와 같은 대상으로는 변경할 수 없습니다.")
         if date < cur.start_date:
             raise validation(f"변경일은 현재 사용 시작일({cur.start_date}) 이후여야 합니다.")
@@ -229,7 +247,7 @@ def cancel_assignment(client, asset_no: str, *, user: CurrentUser) -> None:
             m = client.collection("members").document(prev.member_id).get(transaction=txn)
             if m.exists:  # 복구는 "지금" 소속 그룹·이름 기준(D24, D40)
                 scope, name = m.get("group_code"), m.get("name")
-        target = _Target(prev.member_id, name, prev.shared_label, scope)
+        target = _Target(prev.member_id, name, prev.shared_label, prev.external_label, scope)
         txn.delete(cur_ref)
         txn.update(prev_ref, {"end_date": None, "updated_at": now, "updated_by": user.username})
         txn.update(ref, {**_current_fields(target, prev.id, prev.start_date), "updated_at": now, "updated_by": user.username})

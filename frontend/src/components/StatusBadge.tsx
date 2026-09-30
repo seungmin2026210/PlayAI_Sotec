@@ -5,6 +5,7 @@ const LABEL: Record<QuoteStatus, string> = {
   APPROVED: "승인됨",
   REJECTED: "반려됨",
   CANCELLED: "취소됨",
+  CLOSED: "종결",
 };
 
 export function StatusBadge({ status }: { status: QuoteStatus }) {

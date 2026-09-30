@@ -156,6 +156,7 @@ function AssetListInner({ category }: { category: AssetCategory }) {
           <select value={draft.member_id} onChange={(e) => setDraft({ ...draft, member_id: e.target.value })}>
             <option value="">전체</option>
             {category !== "EDU" && <option value="SHARED">공용</option>}
+            {category !== "EDU" && <option value="EXTERNAL">타업체 제공</option>}
             {members.map((m) => (
               <option key={m.employee_no} value={m.employee_no}>
                 {m.name} ({m.employee_no}){m.active ? "" : " · 퇴사"}
@@ -296,7 +297,14 @@ function AssetListInner({ category }: { category: AssetCategory }) {
                   <td>{a.subcategory_label ?? "-"}</td>
                   <td>{a.name}</td>
                   <td>{typedVal(a) ?? "-"}</td>
-                  <td>{a.current_member_name ?? (a.current_shared_label ? `공용 · ${a.current_shared_label}` : "-")}</td>
+                  <td>
+                    {a.current_member_name ??
+                      (a.current_shared_label
+                        ? `공용 · ${a.current_shared_label}`
+                        : a.current_external_label
+                          ? `타업체 제공 · ${a.current_external_label}`
+                          : "-")}
+                  </td>
                   <td>{a.current_start_date ?? "-"}</td>
                   <td>
                     {a.valid_to ?? "-"} <ExpiryBadgeView badge={a.expiry_badge} />

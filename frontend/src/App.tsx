@@ -91,7 +91,15 @@ export default function App() {
         path="/purchase/new"
         element={
           <Protected>
-            <PurchaseForm />
+            <PurchaseForm mode="create" />
+          </Protected>
+        }
+      />
+      <Route
+        path="/purchase/:unitNo/edit"
+        element={
+          <Protected>
+            <PurchaseForm mode="edit" />
           </Protected>
         }
       />

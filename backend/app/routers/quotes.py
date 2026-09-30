@@ -269,6 +269,20 @@ def cancel_quote(
     return to_quote_read(quote)
 
 
+@router.post("/{quote_id}/close", response_model=QuoteRead)
+def close_quote(
+    quote_id: str,
+    client: firestore.Client = Depends(get_db),
+    user: CurrentUser = Depends(require_super_admin),
+) -> QuoteRead:
+    """종결(PURCHASE-1) — 더 이상 이 견적서로 구매하지 않을 때 수동 처리. 승인됨에서만 가능.
+    목록 기본 화면에서 빠지고(services/query.py), 상태 필터로 다시 찾아볼 수 있다."""
+    quote = _load_or_404(client, quote_id, user)
+    apply_transition(quote, "close")
+    client.collection("quotes").document(quote.id).set(quote.to_dict())
+    return to_quote_read(quote)
+
+
 @router.post("/{quote_id}/purchase-lock", response_model=QuoteRead)
 def purchase_lock_quote(
     quote_id: str,

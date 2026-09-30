@@ -1,6 +1,6 @@
 export type Role = "SUPER_ADMIN" | "GROUP_MANAGER";
 
-export type QuoteStatus = "SUBMITTED" | "APPROVED" | "REJECTED" | "CANCELLED";
+export type QuoteStatus = "SUBMITTED" | "APPROVED" | "REJECTED" | "CANCELLED" | "CLOSED";
 
 export interface User {
   username: string;
@@ -67,6 +67,7 @@ export interface Quote {
   rejected_at: string | null;
   cancelled_at: string | null;
   locked_at: string | null;
+  closed_at: string | null;
   company: Record<string, string>;
   items: QuoteItem[];
 }
@@ -229,6 +230,16 @@ export interface AssetUnitPayload {
   source_quote_id: string | null;
 }
 
+export interface AssetUnitPatchPayload {
+  purchase_date?: string;
+  purchased_from?: string | null;
+  price?: number;
+  unit_type?: AssetUnitType | null;
+  key_value?: string | null;
+  expire_date?: string | null;
+  group_code?: string;
+}
+
 export interface AssetUnitListFilters {
   product_id?: string;
   status?: string;
@@ -258,6 +269,7 @@ export interface AssetListItem {
   current_member_id: string | null;
   current_member_name: string | null;
   current_shared_label: string | null;
+  current_external_label: string | null;
   current_start_date: string | null;
   purchase_date: string | null;
   price: number | null;
@@ -292,6 +304,7 @@ export interface AssetAssignment {
   member_id: string | null;
   member_name: string | null;
   shared_label: string | null;
+  external_label: string | null;
   start_date: string;
   end_date: string | null;
   note: string | null;
@@ -371,6 +384,7 @@ export interface AssetFields {
 export interface AssignTarget {
   member_id: string | null;
   shared_label: string | null;
+  external_label: string | null;
 }
 
 export interface Member {

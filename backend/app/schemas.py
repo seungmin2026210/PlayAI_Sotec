@@ -154,6 +154,7 @@ class QuoteRead(BaseModel):
     rejected_at: datetime | None
     cancelled_at: datetime | None
     locked_at: datetime | None
+    closed_at: datetime | None
 
     company: dict
     items: list[ItemOut]
@@ -266,6 +267,41 @@ class AssetUnitCreate(BaseModel):
     @classmethod
     def _group_valid(cls, v: str) -> str:
         if v not in GROUP_CODES:
+            raise ValueError(f"그룹코드는 {', '.join(GROUP_CODES)} 중 하나여야 합니다.")
+        return v
+
+
+class AssetUnitPatch(BaseModel):
+    """구매 유닛 수정 — 부분 수정. 상품(product_id)·유닛번호·연동 견적서는 바꾸지 않는다
+    (번호가 상품명 기준이라 상품이 바뀌면 번호와 실제 내용이 어긋남). 폐기(EXPIRED)된
+    유닛은 라우터에서 별도로 막는다."""
+
+    purchase_date: date | None = None
+    purchased_from: str | None = Field(default=None, max_length=100)
+    price: int | None = None
+    unit_type: str | None = None
+    key_value: str | None = Field(default=None, max_length=200)
+    expire_date: date | None = None
+    group_code: str | None = None
+
+    @field_validator("price")
+    @classmethod
+    def _price_pos(cls, v: int | None) -> int | None:
+        if v is not None and v <= 0:
+            raise ValueError("금액은 0보다 커야 합니다.")
+        return v
+
+    @field_validator("unit_type")
+    @classmethod
+    def _unit_type_valid(cls, v: str | None) -> str | None:
+        if v is not None and v not in ("KEY", "ACCOUNT"):
+            raise ValueError("유닛 타입은 KEY 또는 ACCOUNT 여야 합니다.")
+        return v
+
+    @field_validator("group_code")
+    @classmethod
+    def _group_valid(cls, v: str | None) -> str | None:
+        if v is not None and v not in GROUP_CODES:
             raise ValueError(f"그룹코드는 {', '.join(GROUP_CODES)} 중 하나여야 합니다.")
         return v
 
@@ -414,6 +450,7 @@ class RenewRequest(BaseModel):
 class AssignRequest(BaseModel):
     member_id: str | None = None
     shared_label: str | None = Field(default=None, max_length=100)
+    external_label: str | None = Field(default=None, max_length=100)
     start_date: date
     note: str | None = Field(default=None, max_length=500)
 
@@ -421,6 +458,7 @@ class AssignRequest(BaseModel):
 class TransferRequest(BaseModel):
     member_id: str | None = None
     shared_label: str | None = Field(default=None, max_length=100)
+    external_label: str | None = Field(default=None, max_length=100)
     date: date
     note: str | None = Field(default=None, max_length=500)
 
@@ -459,6 +497,7 @@ class AssignmentRead(BaseModel):
     member_id: str | None
     member_name: str | None
     shared_label: str | None
+    external_label: str | None
     start_date: date
     end_date: date | None
     note: str | None
@@ -494,6 +533,7 @@ class AssetListItem(BaseModel):
     current_member_id: str | None
     current_member_name: str | None
     current_shared_label: str | None
+    current_external_label: str | None
     current_start_date: date | None
     purchase_date: date | None
     price: int | None

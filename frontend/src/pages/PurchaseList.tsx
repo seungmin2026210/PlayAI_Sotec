@@ -149,19 +149,20 @@ export function PurchaseList() {
               <th className="center">구매일자</th>
               <th className="num">금액</th>
               <th className="center">상태</th>
+              <th className="center">자산 등록</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={7} className="empty">
+                <td colSpan={8} className="empty">
                   불러오는 중…
                 </td>
               </tr>
             )}
             {!loading && data?.items.length === 0 && (
               <tr>
-                <td colSpan={7} className="empty">
+                <td colSpan={8} className="empty">
                   조회된 자산이 없습니다.
                 </td>
               </tr>
@@ -181,8 +182,8 @@ export function PurchaseList() {
                   <td className="num">{formatWon(u.price)}</td>
                   <td>
                     <AssetStatusBadge status={u.status} />
-                    <AssetLinkBadge unit={u} />
                   </td>
+                  <td>{u.asset_link_label ? <AssetLinkBadge unit={u} /> : "-"}</td>
                 </tr>
               ))}
           </tbody>

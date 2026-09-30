@@ -100,6 +100,7 @@ class Quote:
     rejected_at: datetime | None = None
     cancelled_at: datetime | None = None
     locked_at: datetime | None = None
+    closed_at: datetime | None = None
     deleted_at: datetime | None = None
 
     def to_dict(self) -> dict:
@@ -135,6 +136,7 @@ class Quote:
             "rejected_at": self.rejected_at,
             "cancelled_at": self.cancelled_at,
             "locked_at": self.locked_at,
+            "closed_at": self.closed_at,
             "deleted_at": self.deleted_at,
         }
 
@@ -171,6 +173,7 @@ class Quote:
             rejected_at=data.get("rejected_at"),
             cancelled_at=data.get("cancelled_at"),
             locked_at=data.get("locked_at"),
+            closed_at=data.get("closed_at"),
             deleted_at=data.get("deleted_at"),
         )
 
@@ -313,6 +316,7 @@ class Asset:
     current_member_id: str | None = None
     current_member_name: str | None = None
     current_shared_label: str | None = None
+    current_external_label: str | None = None
     current_assignment_id: str | None = None
     current_start_date: str | None = None
 
@@ -365,6 +369,7 @@ class AssetAssignment:
     member_id: str | None = None
     member_name: str | None = None
     shared_label: str | None = None
+    external_label: str | None = None
     end_date: str | None = None
     prev_assignment_id: str | None = None
     note: str | None = None

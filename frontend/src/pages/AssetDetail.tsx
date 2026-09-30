@@ -85,7 +85,13 @@ export function AssetDetail() {
 
   const a = asset;
   const disposed = a.status === "DISPOSED";
-  const currentUser = a.current_member_name ?? (a.current_shared_label ? `공용 · ${a.current_shared_label}` : null);
+  const currentUser =
+    a.current_member_name ??
+    (a.current_shared_label
+      ? `공용 · ${a.current_shared_label}`
+      : a.current_external_label
+        ? `타업체 제공 · ${a.current_external_label}`
+        : null);
   const row = (label: string, value: ReactNode) => (
     <>
       <dt>{label}</dt>
@@ -293,8 +299,10 @@ export function AssetDetail() {
                 <td>
                   {h.member_id ? (
                     <Link to={`/assets/members/${h.member_id}`}>{h.member_name}</Link>
-                  ) : (
+                  ) : h.shared_label ? (
                     `공용 · ${h.shared_label}`
+                  ) : (
+                    `타업체 제공 · ${h.external_label}`
                   )}
                 </td>
                 <td>{h.start_date}</td>
@@ -406,14 +414,15 @@ function TargetDialog({
   onClose: () => void;
   onSubmit: (t: AssignTarget, date: string, note: string) => Promise<boolean>;
 }) {
-  const [target, setTarget] = useState<AssignTarget>({ member_id: "", shared_label: null });
+  const [target, setTarget] = useState<AssignTarget>({ member_id: "", shared_label: null, external_label: null });
   const [date, setDate] = useState(todayKst());
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!target.member_id && !target.shared_label?.trim()) return setError("팀원을 고르거나 공용 장소/용도를 입력하세요.");
+    if (!target.member_id && !target.shared_label?.trim() && !target.external_label?.trim())
+      return setError("팀원을 고르거나 공용 장소/용도, 또는 제공처를 입력하세요.");
     if (await onSubmit(target, date, note)) onClose();
   }
 
@@ -486,7 +495,7 @@ function EditAssignmentDialog({
   const [start, setStart] = useState(row.start_date);
   const [end, setEnd] = useState(row.end_date ?? "");
   const [note, setNote] = useState(row.note ?? "");
-  const who = row.member_name ?? `공용 · ${row.shared_label}`;
+  const who = row.member_name ?? (row.shared_label ? `공용 · ${row.shared_label}` : `타업체 제공 · ${row.external_label}`);
   return (
     <Modal title={`이력 수정 — ${who}`} onClose={onClose}>
       <form

@@ -1,5 +1,5 @@
 import type { ItemInput } from "../types";
-import { formatWon } from "../lib/money";
+import { MoneyInput } from "./MoneyInput";
 
 interface Props {
   items: ItemInput[];
@@ -53,13 +53,10 @@ export function ItemsEditor({ items, onChange }: Props) {
               />
             </td>
             <td>
-              <input
-                type="number"
-                min={1}
+              <MoneyInput
                 value={it.unit_price}
-                onChange={(e) => update(idx, { qty: 1, unit_price: Number(e.target.value) })}
+                onChange={(v) => update(idx, { qty: 1, unit_price: v })}
               />
-              <span className="num">{formatWon(Number(it.unit_price) || 0)}</span>
             </td>
             <td>
               <button

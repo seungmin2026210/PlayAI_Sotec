@@ -170,12 +170,14 @@ STATUS_SUBMITTED = "SUBMITTED"   # 제출됨
 STATUS_APPROVED = "APPROVED"     # 승인됨
 STATUS_REJECTED = "REJECTED"     # 반려됨
 STATUS_CANCELLED = "CANCELLED"   # 취소됨
+STATUS_CLOSED = "CLOSED"         # 종결 — 더 이상 구매 없음(수동), PURCHASE-1
 
 STATUS_LABELS: dict[str, str] = {
     STATUS_SUBMITTED: "제출됨",
     STATUS_APPROVED: "승인됨",
     STATUS_REJECTED: "반려됨",
     STATUS_CANCELLED: "취소됨",
+    STATUS_CLOSED: "종결",
 }
 
 # ---------------------------------------------------------------------------
