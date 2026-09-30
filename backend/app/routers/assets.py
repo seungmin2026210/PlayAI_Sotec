@@ -11,7 +11,13 @@ from fastapi import APIRouter, Depends, Query, Response
 from google.cloud import firestore
 
 from ..auth import CurrentUser
-from ..config import ASSET_CATEGORIES, ASSET_DISPOSED_REASON_DISPOSED, ASSET_STATUS_DISPOSED
+from ..config import (
+    ASSET_CATEGORIES,
+    ASSET_DISPOSED_REASON_DISPOSED,
+    ASSET_STATUS_DELETED,
+    ASSET_STATUS_DISPOSED,
+    ROLE_SUPER_ADMIN,
+)
 from ..database import run_transaction
 from ..deps import (
     assert_can_view_asset,
@@ -28,6 +34,7 @@ from ..presenter import to_asset_list_item, to_asset_read, to_asset_unit_read
 from ..schemas import (
     AssetCreate,
     AssetCreateResponse,
+    AssetDeleteRequest,
     AssetImport,
     AssetListResponse,
     AssetRead,
@@ -45,7 +52,8 @@ from ..schemas import (
 from ..services import asset_assignment, asset_registration, asset_renewal, asset_secret
 from ..services.asset_bulk import check_valid_range
 from ..services.asset_query import asset_history, importable_units, list_assets
-from ..services.asset_status import guard_disposable, guard_not_disposed
+from ..services.asset_registration import has_history
+from ..services.asset_status import guard_deletable, guard_disposable, guard_not_disposed
 from ..services.export_excel import asset_list_filename, build_asset_list_xlsx
 
 router = APIRouter(prefix="/api", tags=["assets"])
@@ -83,6 +91,8 @@ def _category(v: str) -> str:
 
 
 def _query(client, user, category, subcategory, member_id, group, status, expiry, year, name, valid_to, q):
+    if status == ASSET_STATUS_DELETED and user.role != ROLE_SUPER_ADMIN:
+        return []  # D47: 삭제된 자산은 전체관리자만
     return list_assets(
         client,
         category=_category(category),
@@ -206,7 +216,7 @@ def create(
     )
 
 
-# --------------------------------------------------------------------------- 상세 / 수정 / 폐기
+# --------------------------------------------------------------------------- 상세 / 수정 / 폐기 / 삭제
 @router.get("/assets/{asset_no}", response_model=AssetRead)
 def detail(
     asset_no: str,
@@ -301,6 +311,28 @@ def dispose(
             "status": ASSET_STATUS_DISPOSED, "disposed_at": now,
             "disposed_reason": ASSET_DISPOSED_REASON_DISPOSED,
             "updated_at": now, "updated_by": user.username,
+        })
+
+    run_transaction(client, _txn)
+    return _detail(client, asset_no, user)
+
+
+@router.post("/assets/{asset_no}/delete", response_model=AssetRead)
+def delete(
+    asset_no: str,
+    body: AssetDeleteRequest,
+    client: firestore.Client = Depends(get_db),
+    user: CurrentUser = Depends(require_super_admin),
+) -> AssetRead:
+    """D47: 잘못 등록한 기록 삭제 — soft delete(번호 결번, 누가·언제·왜 기록). 되돌릴 수 없음."""
+    now = _now()
+
+    def _txn(txn):
+        ref, asset = asset_assignment.load_asset_in(txn, client, asset_no)
+        guard_deletable(asset, has_history(txn, client, [asset_no], include_renewals=True))
+        txn.update(ref, {
+            "status": ASSET_STATUS_DELETED, "deleted_at": now, "deleted_by": user.username,
+            "deleted_reason": body.reason, "updated_at": now, "updated_by": user.username,
         })
 
     run_transaction(client, _txn)

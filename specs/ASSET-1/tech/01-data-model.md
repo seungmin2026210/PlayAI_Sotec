@@ -32,7 +32,7 @@
   "category": "SW",                  // SW | HW | EDU (config.ASSET_CATEGORIES 재사용). 등록 후 불변(D41)
   "subcategory": "AI_SUB",           // config.ASSET_SUBCATEGORIES[category] 키. EDU는 null
   "name": "GitHub Copilot Business",
-  "status": "IN_USE",                // IDLE | IN_USE | DISPOSED — 트랜잭션으로만 갱신
+  "status": "IN_USE",                // IDLE | IN_USE | DISPOSED | DELETED(D47) — 트랜잭션으로만 갱신
 
   // 그룹
   "group_code": "A",                 // 등록 그룹(미사용·공용일 때 소속)
@@ -75,6 +75,9 @@
   "note": "",
   "disposed_at": null,
   "disposed_reason": null,           // DISPOSED | IMPORT_CANCELLED (D35). 폐기 아닐 땐 null
+  "deleted_at": null,                // 삭제(D47) 시각·처리자·사유(필수). 삭제 아닐 땐 null
+  "deleted_by": null,
+  "deleted_reason": null,
   "created_at": <Timestamp>, "created_by": "Admin",
   "updated_at": <Timestamp>, "updated_by": "Admin"
 }
@@ -212,6 +215,12 @@ read unit → `assets where source_unit_no == unit_no` → 하나라도 `status 
 이력이 있으면 409 `ASSET_HAS_HISTORY` → assets 전부 `DISPOSED`(`disposed_reason = IMPORT_CANCELLED`,
 `disposed_at`), unit `asset_link_kind = null`, `asset_nos = []`. 번호는 결번(seq 되돌리지 않음).
 
+### 8-9a. 삭제(D47)
+read asset → `DELETED`면 409 `ASSET_DELETED`, `DISPOSED`면 409 `ASSET_DISPOSED`, `source_unit_no`가 있으면 409
+`ASSET_IMPORTED`, `IDLE`이 아니거나 `asset_assignments`/`asset_renewals`에 이 자산이 있으면 409 `ASSET_HAS_HISTORY`
+→ `status = DELETED`, `deleted_at`·`deleted_by`·`deleted_reason`. 번호는 결번(seq 되돌리지 않음). 이후 모든 쓰기는
+`ASSET_DELETED`(`services/asset_status.guard_not_disposed`).
+
 ### 8-10. 갱신(D32)
 입력: `asset_nos[]`, `new_valid_to`(필수), `new_valid_from`(선택, 기본 이전 `valid_to` + 1일), `unit_no`(선택).
 read assets 전부(폐기면 409 `ASSET_DISPOSED`, `valid_to == null` 또는 `new_valid_to <= valid_to`면 400),
@@ -227,14 +236,14 @@ assets `valid_from`/`valid_to` 갱신, create `asset_renewals`, unit 있으면 `
 
 `services/query.py` 원칙 그대로: **등호 필터만 Firestore**, 나머지는 애플리케이션 레벨.
 
-- Firestore: `category ==`, `scope_group_code ==`(그룹관리자), `status ==`/`!= DISPOSED`, `current_member_id ==`
+- Firestore: `category ==`, `scope_group_code ==`(그룹관리자), `status ==`/`not in (DISPOSED, DELETED)`, `current_member_id ==`
 - 앱 레벨: 키워드 부분일치(그룹관리자는 `license_key` 제외 — D38), 만료여부(`valid_to` vs `today_kst()`),
   구매연도(`purchase_date[:4]`), 소분류, 사용자 "공용"(`status == IN_USE && current_shared_label != null`), 정렬, 페이지네이션
 - 사용자별 탭: `members`(그룹관리자는 `group_code ==` 본인 그룹 — D46) + `assets where status == IN_USE`를 한 번 읽어
   `current_member_id`·`category`로 집계(공용은 집계 제외).
   한 사람 상세: `asset_assignments where member_id == X`(현재+과거 모두, `end_date` null 여부로 구분).
   그룹관리자면 각 이력의 자산을 읽어 `scope_group_code != 본인 그룹`이면 `linkable: false`(D37)
-- 대시보드 갱신: `assets where status != DISPOSED`(+스코프) → `valid_to` 기간 필터 → `(valid_to, name)`으로 묶음.
+- 대시보드 갱신: `assets where status not in (DISPOSED, DELETED)`(+스코프) → `valid_to` 기간 필터 → `(valid_to, name)`으로 묶음.
   KPI `expired` = `valid_to < today_kst()` 건수(D39)
 - 자산 상세: 자산 + `asset_assignments where asset_no == X` + `asset_renewals where asset_nos array_contains X`
 - 복합 인덱스(`category`+`scope_group_code`+`status` 등)는 쿼리 작성 시 에러 보고 `firestore.indexes.json`에 추가(QUOTE-1과 동일 절차)

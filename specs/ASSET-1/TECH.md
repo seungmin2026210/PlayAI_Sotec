@@ -30,10 +30,10 @@ QUOTE-1/PURCHASE-1과 동일(FastAPI + Firestore, React 18 + TS + Vite). 신규 
 
 | 파일 | 역할 |
 |---|---|
-| `config.py` | "자산관리(ASSET-1)" 섹션 신설: `ASSET_STATUS_*`(IDLE/IN_USE/DISPOSED)+라벨, `ASSET_SUBCATEGORIES`(유형별 소분류, P7), `ASSET_NO_SEQ_MAX=999`, `ASSET_EXPIRING_DAYS=30`, `ASSET_BULK_MAX=100`(P8), `ASSET_TZ="Asia/Seoul"`(D45), `ASSET_SECRET_KEY` 환경변수 이름. `ASSET_CATEGORIES`는 기존 것 재사용 |
+| `config.py` | "자산관리(ASSET-1)" 섹션 신설: `ASSET_STATUS_*`(IDLE/IN_USE/DISPOSED/DELETED)+라벨, `ASSET_HIDDEN_STATUSES`(기본 목록·대시보드 제외, D47), `ASSET_SUBCATEGORIES`(유형별 소분류, P7), `ASSET_NO_SEQ_MAX=999`, `ASSET_EXPIRING_DAYS=30`, `ASSET_BULK_MAX=100`(P8), `ASSET_TZ="Asia/Seoul"`(D45), `ASSET_SECRET_KEY` 환경변수 이름. `ASSET_CATEGORIES`는 기존 것 재사용 |
 | `models.py` | `Asset`, `AssetAssignment`, `AssetRenewal`, `Member` dataclass(`to_dict`/`from_doc`). `AssetUnit`에 `asset_link_kind`·`asset_nos` 추가(C3) |
 | `schemas.py` | 입력/응답 스키마. **응답엔 `password_enc` 없음**, `has_password: bool`만. 입력의 `password`는 write-only — **없음/`null`/`""` = 변경 없음**(D42), 삭제는 별도 엔드포인트. 수정 스키마엔 `category` 필드 자체가 없음(D41). 등록 스키마 `quantity: int = 1`(1~`ASSET_BULK_MAX`). 배정/이관 입력은 `member_id`와 `shared_label` 중 정확히 하나 |
-| `errors.py` | `ALREADY_IMPORTED`, `ASSET_NOT_IDLE`, `ASSET_IN_USE`, `ASSET_NOT_IN_USE`, `ASSET_DISPOSED`, `ASSET_HAS_HISTORY`, `MEMBER_INACTIVE`, `SECRET_KEY_MISSING` 추가(기존 `SEQ_EXHAUSTED`·`ALREADY_RETIRED`·`VALIDATION_ERROR` 재사용) |
+| `errors.py` | `ALREADY_IMPORTED`, `ASSET_NOT_IDLE`, `ASSET_IN_USE`, `ASSET_NOT_IN_USE`, `ASSET_DISPOSED`, `ASSET_DELETED`, `ASSET_IMPORTED`, `ASSET_HAS_HISTORY`, `MEMBER_INACTIVE`, `SECRET_KEY_MISSING` 추가(기존 `SEQ_EXHAUSTED`·`ALREADY_RETIRED`·`VALIDATION_ERROR` 재사용) |
 | `deps.py` | `assert_can_view_asset(asset, user)` — `scope_group_code` 기준, 타 그룹 404. **`can_reveal_password(asset, user)` — 비밀번호 열람 판정 격리 지점(D16)**: 지금은 `role == SUPER_ADMIN`만 True. 팀원 로그인 도입 시 `asset.current_member_id == user.employee_no` 조건만 추가 |
 | `services/asset_no.py`(신규) | `allocate_asset_nos_in(txn, category, purchase_date, count)` — `asset_seq/{cat}-{YY}`에서 연속 N개 확보. 기존 `services/asset_numbering.py`는 구매 유닛 채번 전용이라 건드리지 않음 |
 | `services/asset_dates.py` | `today_kst()`(D45 — 날짜 기준 유일 계산처), 날짜 규칙 검사 순수 함수 `validate_period(...)`(D36) |
@@ -68,6 +68,7 @@ QUOTE-1/PURCHASE-1과 동일(FastAPI + Firestore, React 18 + TS + Vite). 신규 
 | PATCH | `/api/assets/{asset_no}` | 전체관리자 | 수정(번호·유형·상태·현재사용자 제외). `password`에 값이 있을 때만 재암호화(D42) |
 | DELETE | `/api/assets/{asset_no}/password` | 전체관리자 | 비밀번호 삭제(D42) |
 | POST | `/api/assets/{asset_no}/dispose` | 전체관리자 | 폐기 |
+| POST | `/api/assets/{asset_no}/delete` | 전체관리자 | 삭제 `{reason}`(필수, §8-9a, D47). 목록 `status=DELETED`는 전체관리자만(그 외 빈 목록) |
 | POST | `/api/assets/{asset_no}/assign` | 전체관리자 | `{member_id \| shared_label, start_date, note}` |
 | POST | `/api/assets/{asset_no}/return` | 전체관리자 | `{end_date, note}` |
 | POST | `/api/assets/{asset_no}/transfer` | 전체관리자 | `{member_id \| shared_label, date, note}` |

@@ -4,6 +4,7 @@ import {
   assignAsset,
   cancelAssignment,
   cancelImport,
+  deleteAsset,
   disposeAsset,
   editAssignment,
   getAsset,
@@ -22,7 +23,7 @@ import { formatWon } from "../lib/money";
 import { todayKst } from "../lib/date";
 import type { Asset, AssetAssignment, AssignTarget } from "../types";
 
-type Dialog = null | "assign" | "transfer" | "return" | { edit: AssetAssignment };
+type Dialog = null | "assign" | "transfer" | "return" | "delete" | { edit: AssetAssignment };
 
 export function AssetDetail() {
   const { assetNo = "" } = useParams();
@@ -84,7 +85,14 @@ export function AssetDetail() {
   if (!asset) return <div className="page">자산을 찾을 수 없습니다.</div>;
 
   const a = asset;
-  const disposed = a.status === "DISPOSED";
+  const disposed = a.read_only; // 폐기·삭제 — 읽기전용(D47)
+  const deleted = a.status === "DELETED";
+  // D47: 잘못 등록한 기록만 삭제 — 서버도 같은 규칙으로 막는다(409)
+  const deleteBlocked = a.source_unit_no
+    ? "구매에서 가져온 자산은 삭제할 수 없습니다. [가져오기 취소]를 사용하세요."
+    : a.assignments.length || a.renewals.length
+      ? "배정·갱신 이력이 있는 자산은 삭제할 수 없습니다. 폐기하세요."
+      : null;
   const currentUser = a.current_member_name ?? (a.current_shared_label ? `공용 · ${a.current_shared_label}` : null);
   const row = (label: string, value: ReactNode) => (
     <>
@@ -121,6 +129,16 @@ export function AssetDetail() {
                 폐기
               </button>
             )}
+            {a.status === "IDLE" && (
+              <button
+                className="danger"
+                disabled={busy || Boolean(deleteBlocked)}
+                title={deleteBlocked ?? "잘못 등록한 기록을 삭제합니다. 삭제 이력은 남습니다."}
+                onClick={() => setDialog("delete")}
+              >
+                삭제
+              </button>
+            )}
             {a.source_unit_no && !disposed && (
               <button
                 className="warn"
@@ -151,7 +169,7 @@ export function AssetDetail() {
                 {a.current_member_id && <span className="muted"> ({a.current_member_id})</span>} · {a.current_start_date}부터 사용 중
               </>
             ) : disposed ? (
-              <span className="muted">폐기된 자산입니다.</span>
+              <span className="muted">{deleted ? "삭제된 자산입니다." : "폐기된 자산입니다."}</span>
             ) : (
               <span className="muted">미사용</span>
             )}
@@ -183,6 +201,19 @@ export function AssetDetail() {
           </SuperAdminOnly>
         </div>
       </div>
+
+      {deleted && (
+        <div className="detail-grid">
+          <div className="card">
+            <h2>삭제 기록</h2>
+            <dl>
+              {row("삭제자", a.deleted_by)}
+              {row("삭제 시각", a.deleted_at ? new Date(a.deleted_at).toLocaleString("ko-KR") : null)}
+              {row("사유", a.deleted_reason)}
+            </dl>
+          </div>
+        </div>
+      )}
 
       <div className="detail-grid">
         <div className="card">
@@ -378,6 +409,13 @@ export function AssetDetail() {
           onSubmit={(d, note) => run(() => returnAsset(a.asset_no, d, note), "회수했습니다.")}
         />
       )}
+      {dialog === "delete" && (
+        <DeleteDialog
+          assetNo={a.asset_no}
+          onClose={() => setDialog(null)}
+          onSubmit={(reason) => run(() => deleteAsset(a.asset_no, reason), "삭제했습니다.")}
+        />
+      )}
       {dialog && typeof dialog === "object" && (
         <EditAssignmentDialog
           row={dialog.edit}
@@ -521,6 +559,42 @@ function EditAssignmentDialog({
           비고
           <input value={note} onChange={(e) => setNote(e.target.value)} />
         </label>
+        <DialogButtons onClose={onClose} />
+      </form>
+    </Modal>
+  );
+}
+
+function DeleteDialog({
+  assetNo,
+  onClose,
+  onSubmit,
+}: {
+  assetNo: string;
+  onClose: () => void;
+  onSubmit: (reason: string) => Promise<boolean>;
+}) {
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <Modal title={`삭제 — ${assetNo}`} onClose={onClose}>
+      <form
+        className="stack"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (!reason.trim()) return setError("삭제 사유를 입력하세요.");
+          if (await onSubmit(reason.trim())) onClose();
+        }}
+      >
+        <p className="muted">
+          되돌릴 수 없습니다. 목록·대시보드에서 사라지고 번호는 재사용하지 않습니다. 삭제자·시각·사유는 기록되어 상태
+          필터 "삭제됨"에서 볼 수 있습니다.
+        </p>
+        <label>
+          삭제 사유 *
+          <input value={reason} placeholder="예: 중복 등록, 오입력" onChange={(e) => setReason(e.target.value)} />
+        </label>
+        {error && <div className="form-error">{error}</div>}
         <DialogButtons onClose={onClose} />
       </form>
     </Modal>

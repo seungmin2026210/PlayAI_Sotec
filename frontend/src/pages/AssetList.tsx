@@ -86,7 +86,7 @@ function AssetListInner({ category }: { category: AssetCategory }) {
   const sel = Object.values(selected);
   const renewable =
     sel.length > 0 &&
-    sel.every((a) => a.valid_to && a.valid_to === sel[0].valid_to && a.name === sel[0].name && a.status !== "DISPOSED");
+    sel.every((a) => a.valid_to && a.valid_to === sel[0].valid_to && a.name === sel[0].name && !a.read_only);
 
   function toggle(a: AssetListItem) {
     setSelected((cur) => {
@@ -102,7 +102,7 @@ function AssetListInner({ category }: { category: AssetCategory }) {
   const isAdmin = user?.role === "SUPER_ADMIN";
   const typedCol = category === "SW" ? "버전" : category === "HW" ? "모델명" : "강의명";
   const typedVal = (a: AssetListItem) => (category === "SW" ? a.version : category === "HW" ? a.model : a.course_title);
-  const colCount = 10 + (isAdmin ? 1 : 0);
+  const colCount = 9 + (isAdmin ? 1 : 0);
   const yearNow = new Date().getFullYear();
 
   return (
@@ -181,10 +181,11 @@ function AssetListInner({ category }: { category: AssetCategory }) {
         <label>
           상태
           <select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })}>
-            <option value="">전체(폐기 제외)</option>
+            <option value="">전체(폐기·삭제 제외)</option>
             <option value="IDLE">미사용</option>
             <option value="IN_USE">사용 중</option>
             <option value="DISPOSED">폐기</option>
+            {isAdmin && <option value="DELETED">삭제됨</option>}
           </select>
         </label>
         <label>
@@ -225,26 +226,31 @@ function AssetListInner({ category }: { category: AssetCategory }) {
             </span>
           </div>
         )}
-        <div className="filter-actions">
+        <div className="filter-actions" style={{ justifyContent: "flex-end" }}>
           <button type="submit">검색</button>
           <button type="button" className="ghost" onClick={() => apply(fromParams(new URLSearchParams()))}>
             초기화
           </button>
-          <SuperAdminOnly>
-            <button
-              type="button"
-              className="primary"
-              disabled={!renewable}
-              title="같은 품명·같은 종료일 자산을 골라 한꺼번에 갱신"
-              onClick={() => setRenewOpen(true)}
-            >
-              갱신{sel.length ? ` (${sel.length}건)` : ""}
-            </button>
-          </SuperAdminOnly>
         </div>
       </form>
 
       <div className="card">
+        <SuperAdminOnly>
+          <div className="row-gap" style={{ justifyContent: "flex-end", alignItems: "center", marginBottom: 10 }}>
+            <span className="muted">
+              {sel.length ? `${sel.length}건 선택됨` : "같은 품명·같은 종료일 자산을 체크하면 한꺼번에 갱신할 수 있습니다."}
+            </span>
+            <button
+              type="button"
+              className="primary"
+              disabled={!renewable}
+              title={sel.length && !renewable ? "품명과 종료일이 같은 자산끼리만 갱신할 수 있습니다." : undefined}
+              onClick={() => setRenewOpen(true)}
+            >
+              갱신{sel.length ? ` (${sel.length}건)` : ""}
+            </button>
+          </div>
+        </SuperAdminOnly>
         <table className="list-table">
           <thead>
             <tr>
@@ -258,7 +264,6 @@ function AssetListInner({ category }: { category: AssetCategory }) {
               <th>유효기간 종료</th>
               <th>그룹</th>
               <th>상태</th>
-              <th />
             </tr>
           </thead>
           <tbody>
@@ -278,20 +283,26 @@ function AssetListInner({ category }: { category: AssetCategory }) {
             )}
             {!loading &&
               data?.items.map((a) => (
-                <tr key={a.asset_no} className={a.status === "DISPOSED" ? "dim" : undefined}>
+                <tr
+                  key={a.asset_no}
+                  onClick={() => navigate(`/assets/item/${a.asset_no}`)}
+                  className={a.read_only ? "clickable dim" : "clickable"}
+                >
                   {isAdmin && (
-                    <td>
+                    <td onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         style={{ width: "auto" }}
                         checked={Boolean(selected[a.asset_no])}
-                        disabled={!a.valid_to || a.status === "DISPOSED"}
+                        disabled={!a.valid_to || a.read_only}
                         onChange={() => toggle(a)}
                       />
                     </td>
                   )}
                   <td>
-                    <Link to={`/assets/item/${a.asset_no}`}>{a.asset_no}</Link>
+                    <Link to={`/assets/item/${a.asset_no}`} onClick={(e) => e.stopPropagation()}>
+                      {a.asset_no}
+                    </Link>
                   </td>
                   <td>{a.subcategory_label ?? "-"}</td>
                   <td>{a.name}</td>
@@ -304,9 +315,6 @@ function AssetListInner({ category }: { category: AssetCategory }) {
                   <td>{a.scope_group_name}</td>
                   <td>
                     <AssetStateBadge status={a.status} />
-                  </td>
-                  <td>
-                    <Link to={`/assets/item/${a.asset_no}`}>상세</Link>
                   </td>
                 </tr>
               ))}

@@ -146,6 +146,7 @@ label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--
 .badge-a-idle { background: #e5e7eb; color: #374151; }
 .badge-a-in_use { background: #dcfce7; color: #15803d; }
 .badge-a-disposed { background: #f3f4f6; color: #9ca3af; }
+.badge-a-deleted { background: #fee2e2; color: #b91c1c; }
 .badge-expired { background: #fee2e2; color: #b91c1c; }
 .badge-expiring { background: #fef3c7; color: #92400e; }
 .badge-link { background: #eef2ff; color: #4338ca; }

@@ -404,6 +404,18 @@ class UnitNoRequest(BaseModel):
     unit_no: str
 
 
+class AssetDeleteRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def _strip(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("삭제 사유를 입력하세요.")
+        return v
+
+
 class RenewRequest(BaseModel):
     asset_nos: list[str] = Field(min_length=1)
     new_valid_to: date
@@ -522,6 +534,9 @@ class AssetListItem(BaseModel):
 
 class AssetRead(AssetListItem):
     disposed_at: datetime | None
+    deleted_at: datetime | None
+    deleted_by: str | None
+    deleted_reason: str | None
     created_at: datetime | None
     created_by: str | None
     updated_at: datetime | None

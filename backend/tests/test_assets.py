@@ -288,6 +288,56 @@ def test_dispose_rules(client, admin_headers):
     assert client.get("/api/assets?category=SW&status=DISPOSED", headers=admin_headers).json()["total"] == 1
 
 
+# --------------------------------------------------------------------------- 삭제(D47)
+def _delete(client, h, asset_no, reason="중복 등록"):
+    return client.post(f"/api/assets/{asset_no}/delete", json={"reason": reason}, headers=h)
+
+
+def test_delete_records_who_when_why_and_hides(client, admin_headers, manager_headers):
+    keep = _one(client, admin_headers, valid_to=D(5))
+    no = _one(client, admin_headers, valid_to=D(5))
+    assert _delete(client, admin_headers, no, reason="  ").status_code == 422  # 사유 필수
+    a = _delete(client, admin_headers, no).json()
+    assert a["status"] == "DELETED" and a["read_only"] is True
+    assert a["deleted_by"] == "Admin" and a["deleted_reason"] == "중복 등록" and a["deleted_at"]
+
+    assert _code(client.patch(f"/api/assets/{no}", json={"note": "x"}, headers=admin_headers)) == "ASSET_DELETED"
+    assert _code(client.post(f"/api/assets/{no}/dispose", headers=admin_headers)) == "ASSET_DELETED"
+    assert _code(_delete(client, admin_headers, no)) == "ASSET_DELETED"
+    # 기본 목록·대시보드에서 숨김, "삭제됨" 필터는 전체관리자만
+    assert [i["asset_no"] for i in client.get("/api/assets?category=SW", headers=admin_headers).json()["items"]] == [keep]
+    assert client.get("/api/assets?category=SW&status=DELETED", headers=admin_headers).json()["total"] == 1
+    assert client.get("/api/assets?category=SW&status=DELETED", headers=manager_headers).json()["total"] == 0
+    assert _get(client, manager_headers, no).status_code == 404
+    kpi = client.get(f"/api/dashboard/renewals?from={D(-30)}&to={D(30)}", headers=admin_headers).json()["kpi"]
+    assert kpi["d30"] == 1
+    # 번호는 결번 — 새 등록은 다음 번호
+    assert _one(client, admin_headers) == f"SW-{YY}-003"
+
+
+def test_delete_rules(client, admin_headers, manager_headers):
+    no = _one(client, admin_headers, valid_to="2026-12-31")
+    assert _delete(client, manager_headers, no).status_code == 403
+    # 배정 이력(회수 후에도)
+    _member(client, admin_headers)
+    _assign(client, admin_headers, no, member_id="Z001", start=D(-3))
+    assert _code(_delete(client, admin_headers, no)) == "ASSET_HAS_HISTORY"
+    client.post(f"/api/assets/{no}/return", json={"end_date": D()}, headers=admin_headers)
+    assert _code(_delete(client, admin_headers, no)) == "ASSET_HAS_HISTORY"
+    # 갱신 기록
+    renewed = _one(client, admin_headers, valid_to="2026-12-31")
+    client.post("/api/assets/renew", json={"asset_nos": [renewed], "new_valid_to": "2027-12-31"}, headers=admin_headers)
+    assert _code(_delete(client, admin_headers, renewed)) == "ASSET_HAS_HISTORY"
+    # 폐기된 자산
+    disposed = _one(client, admin_headers)
+    client.post(f"/api/assets/{disposed}/dispose", headers=admin_headers)
+    assert _code(_delete(client, admin_headers, disposed)) == "ASSET_DISPOSED"
+    # 구매에서 가져온 자산 → 가져오기 취소로
+    unit_no = _unit(client, admin_headers)
+    imported = client.post("/api/assets/import", json={"unit_no": unit_no}, headers=admin_headers).json()["asset_nos"][0]
+    assert _code(_delete(client, admin_headers, imported)) == "ASSET_IMPORTED"
+
+
 # --------------------------------------------------------------------------- 가져오기
 def test_import_maps_values_and_splits_price(client, admin_headers, db):
     unit_no = _unit(client, admin_headers, price=1000)
@@ -415,6 +465,7 @@ def test_group_manager_cannot_write(client, admin_headers, manager_headers):
     assert _create(client, manager_headers).status_code == 403
     assert client.patch(f"/api/assets/{no}", json={"note": "x"}, headers=manager_headers).status_code == 403
     assert client.post(f"/api/assets/{no}/dispose", headers=manager_headers).status_code == 403
+    assert client.post(f"/api/assets/{no}/delete", json={"reason": "x"}, headers=manager_headers).status_code == 403
     assert client.post("/api/members", json={"employee_no": "Z9", "name": "x", "group_code": "A"}, headers=manager_headers).status_code == 403
     assert client.get("/api/assets/importable", headers=manager_headers).status_code == 403
 
@@ -507,4 +558,4 @@ def test_meta_has_asset_constants(client, admin_headers):
     m = client.get("/api/meta", headers=admin_headers).json()
     assert {s["code"] for s in m["asset_subcategories"]["SW"]} == {"LICENSE", "AI_SUB", "ETC"}
     assert m["asset_subcategories"]["EDU"] == []
-    assert [s["code"] for s in m["asset_statuses"]] == ["IDLE", "IN_USE", "DISPOSED"]
+    assert [s["code"] for s in m["asset_statuses"]] == ["IDLE", "IN_USE", "DISPOSED", "DELETED"]

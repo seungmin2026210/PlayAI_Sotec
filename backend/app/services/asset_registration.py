@@ -14,6 +14,7 @@ from ..auth import CurrentUser
 from ..config import (
     ASSET_DISPOSED_REASON_IMPORT_CANCELLED,
     ASSET_LINK_IMPORTED,
+    ASSET_HIDDEN_STATUSES,
     ASSET_STATUS_DISPOSED,
     ASSET_STATUS_IDLE,
     ASSET_STATUS_IN_USE,
@@ -147,9 +148,9 @@ def cancel_import(client, unit_no: str, user: CurrentUser) -> list[str]:
             raise validation("자산으로 가져온 구매 기록이 아닙니다.")
         q = client.collection("assets").where(filter=FieldFilter("source_unit_no", "==", unit_no))
         assets = [Asset.from_doc(d.to_dict()) for d in q.stream(transaction=txn)]
-        assets = [a for a in assets if a.status != ASSET_STATUS_DISPOSED]
+        assets = [a for a in assets if a.status not in ASSET_HIDDEN_STATUSES]
         nos = [a.asset_no for a in assets]
-        if any(a.status == ASSET_STATUS_IN_USE for a in assets) or _has_history(txn, client, nos):
+        if any(a.status == ASSET_STATUS_IN_USE for a in assets) or has_history(txn, client, nos):
             raise AppError(
                 ASSET_HAS_HISTORY, 409,
                 "사용 이력이 있는 자산이 포함돼 있어 가져오기를 취소할 수 없습니다. 먼저 배정 취소하세요.",
@@ -168,7 +169,8 @@ def cancel_import(client, unit_no: str, user: CurrentUser) -> list[str]:
     return run_transaction(client, _txn)
 
 
-def _has_history(txn, client: firestore.Client, asset_nos: list[str]) -> bool:
+def has_history(txn, client: firestore.Client, asset_nos: list[str], *, include_renewals: bool = False) -> bool:
+    """배정 이력(D35) — 삭제(D47)는 갱신 기록까지 본다."""
     for i in range(0, len(asset_nos), 30):  # Firestore "in" 은 30개까지
         q = (
             client.collection("asset_assignments")
@@ -177,4 +179,9 @@ def _has_history(txn, client: firestore.Client, asset_nos: list[str]) -> bool:
         )
         if any(True for _ in q.stream(transaction=txn)):
             return True
+    if include_renewals:
+        for no in asset_nos:
+            q = client.collection("asset_renewals").where(filter=FieldFilter("asset_nos", "array_contains", no)).limit(1)
+            if any(True for _ in q.stream(transaction=txn)):
+                return True
     return False

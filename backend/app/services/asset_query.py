@@ -14,8 +14,8 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from ..config import (
     ASSET_CATEGORIES,
     ASSET_EXPIRING_DAYS,
+    ASSET_HIDDEN_STATUSES,
     ASSET_RENEWAL_KPI_FAR_DAYS,
-    ASSET_STATUS_DISPOSED,
     ASSET_STATUS_IN_USE,
 )
 from ..models import Asset, AssetAssignment, AssetRenewal, AssetUnit, Member
@@ -115,7 +115,7 @@ def list_assets(
         if status:
             if a.status != status:
                 return False
-        elif a.status == ASSET_STATUS_DISPOSED:  # 기본: 폐기 숨김
+        elif a.status in ASSET_HIDDEN_STATUSES:  # 기본: 폐기·삭제 숨김(D26, D47)
             return False
         if subcategory and a.subcategory != subcategory:
             return False
@@ -200,14 +200,14 @@ def member_assignments(
 def renewal_calendar(
     client: firestore.Client, *, scope_group: str | None, date_from: str, date_to: str
 ) -> tuple[list[dict], dict[str, int]]:
-    """유효기간 종료일이 있는 미폐기 자산을 (종료일, 품명, 유형)으로 묶는다 + KPI."""
+    """유효기간 종료일이 있는 미폐기·미삭제 자산을 (종료일, 품명, 유형)으로 묶는다 + KPI."""
     today = today_kst()
     t = today.isoformat()
     d30 = (today + timedelta(days=ASSET_EXPIRING_DAYS)).isoformat()
     d90 = (today + timedelta(days=ASSET_RENEWAL_KPI_FAR_DAYS)).isoformat()
     assets = [
         a for a in _scoped_assets(client, scope_group)
-        if a.valid_to and a.status != ASSET_STATUS_DISPOSED
+        if a.valid_to and a.status not in ASSET_HIDDEN_STATUSES
     ]
     kpi = {
         "expired": sum(a.valid_to < t for a in assets),
