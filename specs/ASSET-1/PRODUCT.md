@@ -198,6 +198,8 @@
 | 폐기된 구매 유닛 가져오기 | `409 ALREADY_RETIRED` |
 | 사용 중인 자산에 배정 | `409 ASSET_NOT_IDLE` |
 | 사용 중인 자산 폐기 | `409 ASSET_IN_USE` |
+| 가져온 자산 중 사용 중인 것이 있는 구매 기록 폐기(D49) | `409 ASSET_IN_USE` |
+| 폐기된 구매 기록의 가져오기 취소(D49) | `409 ALREADY_RETIRED` |
 | 폐기된 자산 수정·배정·갱신·삭제 | `409 ASSET_DISPOSED` |
 | 삭제된 자산 수정·배정·갱신·폐기·삭제 | `409 ASSET_DELETED` |
 | 구매에서 가져온 자산 삭제 | `409 ASSET_IMPORTED` |

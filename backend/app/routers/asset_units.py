@@ -11,14 +11,14 @@ from fastapi import APIRouter, Depends, Query
 from google.cloud import firestore
 
 from ..auth import CurrentUser
-from ..config import ASSET_UNIT_STATUS_AVAILABLE, ASSET_UNIT_STATUS_EXPIRED
+from ..config import ASSET_UNIT_STATUS_AVAILABLE
 from ..database import run_transaction
 from ..deps import assert_can_view_asset_unit, get_current_user, get_db, require_super_admin, scope_group
-from ..errors import ALREADY_RETIRED, NOT_FOUND, PRODUCT_INACTIVE, AppError
+from ..errors import NOT_FOUND, PRODUCT_INACTIVE, AppError
 from ..models import AssetProduct, AssetUnit, Quote
 from ..presenter import to_asset_unit_list_item, to_asset_unit_read
 from ..schemas import AssetUnitCreate, AssetUnitListResponse, AssetUnitRead
-from ..services import asset_numbering
+from ..services import asset_numbering, asset_registration
 from ..services.asset_query import list_asset_units as query_asset_units
 from ..services.status import apply_purchase_lock
 
@@ -150,18 +150,6 @@ def retire_asset_unit(
 ) -> AssetUnitRead:
     """만료/폐기 — 물리 삭제 없음. 번호는 영구 보존(재사용 안 함).
 
-    아직 배정 중(`ASSIGNED`)인 유닛의 반납은 자산관리 탭(팀원 구현) 소관이라 여기선
-    상태값만 보고 판단한다 — 이 PR 범위에서 생성되는 유닛은 항상 AVAILABLE 이므로
-    실제로 ASSIGNED 상태를 다루는 건 자산관리 기능이 붙은 뒤부터다."""
-    unit = _load_unit_or_404(client, unit_no, user)
-    if unit.status == ASSET_UNIT_STATUS_EXPIRED:
-        raise AppError(ALREADY_RETIRED, 409, "이미 폐기 처리된 자산입니다.")
-
-    now = _now()
-    client.collection("asset_units").document(unit_no).update(
-        {"status": ASSET_UNIT_STATUS_EXPIRED, "retired_at": now, "updated_at": now}
-    )
-    unit.status = ASSET_UNIT_STATUS_EXPIRED
-    unit.retired_at = now
-    unit.updated_at = now
-    return to_asset_unit_read(unit)
+    이 기록에서 가져온 자산도 함께 폐기한다(COORDINATION C4) — 사용 중 자산이 있으면 전체 거부."""
+    _load_unit_or_404(client, unit_no, user)
+    return to_asset_unit_read(asset_registration.retire_unit(client, unit_no, user))
