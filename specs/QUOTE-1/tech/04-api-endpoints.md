@@ -52,11 +52,11 @@ Base: `/api`. 인증: `Authorization: Bearer <token>` (로그인 제외).
 | `SEQ_EXHAUSTED` | 409 | 관리번호 999 초과 (open-11) |
 | `EXPORT_NOT_APPROVED` | 409 | 승인되지 않은 견적서를 개별 엑셀/PDF로 내보내려 시도 |
 | `VALIDATION_ERROR` | 400 | (ASSET-1) 도메인 규칙 위반 — 날짜 규칙(D36), 수량 범위, 유형 변경, 갱신 조건 등. 스키마 형식 오류는 위 422 |
-| `ALREADY_RETIRED` | 409 | (PURCHASE-1/ASSET-1) 폐기된 구매 유닛 재폐기·가져오기 |
+| `ALREADY_RETIRED` | 409 | (PURCHASE-1/ASSET-1) 폐기된 구매 유닛 재폐기·가져오기·가져오기 취소 |
 | `ALREADY_IMPORTED` | 409 | (ASSET-1) 이미 가져왔거나 갱신에 쓴 구매 유닛을 다시 연결 |
 | `ASSET_NOT_IDLE` | 409 | (ASSET-1) 사용 중인 자산에 배정 |
 | `ASSET_NOT_IN_USE` | 409 | (ASSET-1) 사용 중이 아닌 자산의 회수·이관·배정 취소 |
-| `ASSET_IN_USE` | 409 | (ASSET-1) 사용 중인 자산 폐기(P1) |
+| `ASSET_IN_USE` | 409 | (ASSET-1) 사용 중인 자산 폐기(P1), 사용 중 자산이 있는 구매 유닛 폐기(D49) |
 | `ASSET_DISPOSED` | 409 | (ASSET-1) 폐기된 자산 수정·배정·갱신 |
 | `ASSET_HAS_HISTORY` | 409 | (ASSET-1) 사용 이력이 있는 자산이 섞인 가져오기 취소 |
 | `MEMBER_INACTIVE` | 409 | (ASSET-1) 퇴사자에게 배정·이관 |

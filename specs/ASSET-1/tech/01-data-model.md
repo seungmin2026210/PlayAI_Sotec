@@ -74,7 +74,7 @@
 
   "note": "",
   "disposed_at": null,
-  "disposed_reason": null,           // DISPOSED | IMPORT_CANCELLED (D35). 폐기 아닐 땐 null
+  "disposed_reason": null,           // DISPOSED | IMPORT_CANCELLED (D35) | PURCHASE_RETIRED (D49). 폐기 아닐 땐 null
   "deleted_at": null,                // 삭제(D47) 시각·처리자·사유(필수). 삭제 아닐 땐 null
   "deleted_by": null,
   "deleted_reason": null,

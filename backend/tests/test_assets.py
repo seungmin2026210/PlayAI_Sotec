@@ -393,6 +393,43 @@ def test_cancel_import_rejects_history_after_return(client, admin_headers):
     assert _code(client.post("/api/assets/import/cancel", json={"unit_no": unit_no}, headers=admin_headers)) == "ASSET_HAS_HISTORY"
 
 
+# --------------------------------------------------------------------------- 구매 폐기 연쇄(C4)
+def test_retire_unit_disposes_imported_assets(client, admin_headers):
+    unit_no = _unit(client, admin_headers)
+    nos = client.post("/api/assets/import", json={"unit_no": unit_no, "quantity": 2}, headers=admin_headers).json()["asset_nos"]
+    client.post(f"/api/assets/{nos[0]}/dispose", headers=admin_headers)  # 이미 폐기 — 사유 유지
+    r = client.post(f"/api/asset-units/{unit_no}/retire", headers=admin_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "EXPIRED"
+    a0, a1 = (_get(client, admin_headers, n).json() for n in nos)
+    assert a0["status"] == "DISPOSED" and a0["disposed_reason"] == "DISPOSED"
+    assert a1["status"] == "DISPOSED" and a1["disposed_reason"] == "PURCHASE_RETIRED"
+    assert a1["disposed_reason_label"] == "구매 폐기"
+    # 폐기된 구매 기록은 가져오기 취소 불가
+    r = client.post("/api/assets/import/cancel", json={"unit_no": unit_no}, headers=admin_headers)
+    assert r.status_code == 409 and _code(r) == "ALREADY_RETIRED"
+
+
+def test_retire_unit_blocked_by_in_use_asset(client, admin_headers):
+    unit_no = _unit(client, admin_headers)
+    nos = client.post("/api/assets/import", json={"unit_no": unit_no, "quantity": 2}, headers=admin_headers).json()["asset_nos"]
+    _member(client, admin_headers)
+    _assign(client, admin_headers, nos[1], member_id="Z001")
+    r = client.post(f"/api/asset-units/{unit_no}/retire", headers=admin_headers)
+    assert r.status_code == 409 and _code(r) == "ASSET_IN_USE" and nos[1] in r.json()["detail"]["message"]
+    # 전부 아니면 전무 — 아무것도 안 바뀜
+    assert client.get(f"/api/asset-units/{unit_no}", headers=admin_headers).json()["retired_at"] is None
+    assert _get(client, admin_headers, nos[0]).json()["status"] == "IDLE"
+
+
+def test_retire_unit_keeps_renewed_assets(client, admin_headers):
+    nos = _create(client, admin_headers, quantity=2, valid_from="2026-01-01", valid_to="2026-12-31").json()["asset_nos"]
+    unit_no = _unit(client, admin_headers)
+    client.post("/api/assets/renew", json={"asset_nos": nos, "new_valid_to": "2027-12-31", "unit_no": unit_no}, headers=admin_headers)
+    assert client.post(f"/api/asset-units/{unit_no}/retire", headers=admin_headers).status_code == 200
+    assert all(_get(client, admin_headers, n).json()["status"] == "IDLE" for n in nos)
+
+
 # --------------------------------------------------------------------------- 갱신
 def test_renew_bulk_with_unit(client, admin_headers):
     nos = _create(client, admin_headers, quantity=2, valid_from="2026-01-01", valid_to="2026-12-31").json()["asset_nos"]

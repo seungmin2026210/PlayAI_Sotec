@@ -67,7 +67,7 @@ if quote is not None and apply_purchase_lock(quote):
 | GET | `/api/asset-units` | 로그인(그룹 스코프) | 유닛 목록(상품/상태/그룹 필터, 페이지네이션) |
 | POST | `/api/asset-units` | 전체관리자 | 유닛 등록(채번 + 견적 연동 시 자동 잠금) |
 | GET | `/api/asset-units/{unit_no}` | 로그인(그룹 스코프) | 유닛 상세 |
-| POST | `/api/asset-units/{unit_no}/retire` | 전체관리자 | 폐기(soft delete) |
+| POST | `/api/asset-units/{unit_no}/retire` | 전체관리자 | 폐기(soft delete) + 가져온 자산 연쇄 폐기(ASSET-1 D49) |
 | GET | `/api/meta` | 로그인 | 기존 응답에 `asset_categories` 필드 추가 |
 
 에러 코드는 `errors.py`에 상수로 정의, 응답 형태는 QUOTE-1과 동일 `{"detail":{"code","message"}}`.

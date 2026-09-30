@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { getAssetUnit, retireAssetUnit } from "../api/purchase";
+import { getAsset } from "../api/assets";
 import { ApiError } from "../api/client";
 import { useToast } from "../components/Toast";
 import { SuperAdminOnly } from "../components/RoleGate";
@@ -35,15 +36,20 @@ export function PurchaseDetail() {
   }, [reload]);
 
   async function onRetire() {
-    // C4: 자산으로 가져온 유닛이어도 자산은 영향 없음(가져올 때 복사) — 경고만 한다.
-    const linked =
-      unit?.asset_link_kind && unit.asset_nos.length
-        ? `${unit.asset_link_kind === "IMPORTED" ? "자산" : "갱신"} ${unit.asset_nos[0]}${unit.asset_nos.length > 1 ? ` 외 ${unit.asset_nos.length - 1}건` : ""}에 연결된 구매 기록입니다(자산은 그대로 유지됩니다).\n`
-        : "";
-    if (!window.confirm(`${linked}폐기 처리하면 되돌릴 수 없습니다. 번호는 재사용되지 않습니다. 계속할까요?`))
-      return;
+    if (!unit) return;
     setBusy(true);
     try {
+      // C4: 가져온 자산 중 아직 살아 있는 것은 함께 폐기된다(갱신 연결 자산은 유지).
+      let linked = "";
+      if (unit.asset_link_kind === "IMPORTED" && unit.asset_nos.length) {
+        const assets = await Promise.all(unit.asset_nos.map(getAsset));
+        const live = assets.filter((a) => a.status !== "DISPOSED" && a.status !== "DELETED").map((a) => a.asset_no);
+        if (live.length) linked = `다음 자산 ${live.length}건도 함께 폐기됩니다: ${live.join(", ")}\n`;
+      } else if (unit.asset_link_kind === "RENEWED") {
+        linked = "갱신에 사용된 구매 기록입니다(갱신된 자산은 그대로 유지됩니다).\n";
+      }
+      if (!window.confirm(`${linked}폐기 처리하면 되돌릴 수 없습니다. 번호는 재사용되지 않습니다. 계속할까요?`))
+        return;
       await retireAssetUnit(id);
       toast.show("폐기 처리했습니다.", "success");
       await reload();

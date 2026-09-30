@@ -1,4 +1,4 @@
-"""자산 등록(직접 · 구매에서 가져오기, 수량 N) · 가져오기 취소 — specs/ASSET-1 § 8-1, 8-2, 8-9.
+"""자산 등록(직접 · 구매에서 가져오기, 수량 N) · 가져오기 취소 · 구매 폐기 연쇄 — specs/ASSET-1 § 8-1, 8-2, 8-9, COORDINATION C4.
 
 입력 정리·금액 분할은 `asset_bulk`(순수 함수), 채번은 `asset_no`. 비밀번호 암호화는 트랜잭션
 **밖에서** 먼저 한다 — 키가 없으면(501) 아무것도 쓰기 전에 실패(D43).
@@ -13,14 +13,24 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from ..auth import CurrentUser
 from ..config import (
     ASSET_DISPOSED_REASON_IMPORT_CANCELLED,
+    ASSET_DISPOSED_REASON_PURCHASE_RETIRED,
     ASSET_LINK_IMPORTED,
     ASSET_HIDDEN_STATUSES,
     ASSET_STATUS_DISPOSED,
     ASSET_STATUS_IDLE,
     ASSET_STATUS_IN_USE,
+    ASSET_UNIT_STATUS_EXPIRED,
 )
 from ..database import run_transaction
-from ..errors import ALREADY_IMPORTED, ALREADY_RETIRED, ASSET_HAS_HISTORY, NOT_FOUND, AppError, validation
+from ..errors import (
+    ALREADY_IMPORTED,
+    ALREADY_RETIRED,
+    ASSET_HAS_HISTORY,
+    ASSET_IN_USE,
+    NOT_FOUND,
+    AppError,
+    validation,
+)
 from ..models import Asset, AssetUnit
 from . import asset_secret
 from .asset_bulk import check_quantity, check_valid_range, clean_fields, split_price
@@ -144,6 +154,8 @@ def cancel_import(client, unit_no: str, user: CurrentUser) -> list[str]:
         snap = unit_ref.get(transaction=txn)
         if not snap.exists:
             raise AppError(NOT_FOUND, 404, "구매 기록을 찾을 수 없습니다.")
+        if snap.to_dict().get("retired_at") is not None:
+            raise AppError(ALREADY_RETIRED, 409, "폐기된 구매 기록은 가져오기를 취소할 수 없습니다.")
         if snap.get("asset_link_kind") != ASSET_LINK_IMPORTED:
             raise validation("자산으로 가져온 구매 기록이 아닙니다.")
         q = client.collection("assets").where(filter=FieldFilter("source_unit_no", "==", unit_no))
@@ -165,6 +177,49 @@ def cancel_import(client, unit_no: str, user: CurrentUser) -> list[str]:
             })
         txn.update(unit_ref, {"asset_link_kind": None, "asset_nos": [], "updated_at": now})
         return nos
+
+    return run_transaction(client, _txn)
+
+
+# --------------------------------------------------------------------------- 구매 폐기 연쇄(COORDINATION C4)
+def retire_unit(client, unit_no: str, user: CurrentUser) -> AssetUnit:
+    """구매 기록 폐기 + 그 기록에서 **가져온** 살아 있는 자산을 한 트랜잭션으로 폐기.
+
+    갱신 연결(RENEWED) 자산은 원래 따로 있던 자산이라 건드리지 않는다. 이미 폐기·삭제된 자산은
+    원래 사유를 유지(건너뜀). 사용 중 자산이 하나라도 있으면 전체 거부 — 먼저 회수(P1).
+    호출자가 조회 권한(assert_can_view_asset_unit)을 먼저 확인한다."""
+    now = _now()
+
+    def _txn(txn):
+        unit_ref = client.collection("asset_units").document(unit_no)
+        snap = unit_ref.get(transaction=txn)
+        if not snap.exists:
+            raise AppError(NOT_FOUND, 404, "자산을 찾을 수 없습니다.")
+        unit = AssetUnit.from_doc(snap.id, snap.to_dict())
+        if unit.status == ASSET_UNIT_STATUS_EXPIRED:
+            raise AppError(ALREADY_RETIRED, 409, "이미 폐기 처리된 자산입니다.")
+        q = client.collection("assets").where(filter=FieldFilter("source_unit_no", "==", unit_no))
+        assets = [Asset.from_doc(d.to_dict()) for d in q.stream(transaction=txn)]
+        assets = [a for a in assets if a.status not in ASSET_HIDDEN_STATUSES]
+        in_use = sorted(a.asset_no for a in assets if a.status == ASSET_STATUS_IN_USE)
+        if in_use:
+            raise AppError(
+                ASSET_IN_USE, 409,
+                f"사용 중인 자산이 있어 폐기할 수 없습니다. 먼저 회수하세요: {', '.join(in_use)}",
+            )
+        for a in assets:
+            txn.update(client.collection("assets").document(a.asset_no), {
+                "status": ASSET_STATUS_DISPOSED,
+                "disposed_reason": ASSET_DISPOSED_REASON_PURCHASE_RETIRED,
+                "disposed_at": now,
+                "updated_at": now,
+                "updated_by": user.username,
+            })
+        txn.update(unit_ref, {"status": ASSET_UNIT_STATUS_EXPIRED, "retired_at": now, "updated_at": now})
+        unit.status = ASSET_UNIT_STATUS_EXPIRED
+        unit.retired_at = now
+        unit.updated_at = now
+        return unit
 
     return run_transaction(client, _txn)
 
