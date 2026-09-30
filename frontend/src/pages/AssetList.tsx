@@ -10,6 +10,7 @@ import { SuperAdminOnly } from "../components/RoleGate";
 import { AssetTabs, CATEGORY_LABEL, categoryPath, slugToCategory } from "../components/AssetTabs";
 import { AssetStateBadge, ExpiryBadgeView } from "../components/AssetBadges";
 import { Modal } from "../components/Modal";
+import { AssetUploadModal } from "../components/AssetUploadModal";
 import { addDays } from "../lib/date";
 import type { AssetCategory, AssetListItem, AssetListResponse, AssetUnit, Member } from "../types";
 
@@ -44,6 +45,7 @@ function AssetListInner({ category }: { category: AssetCategory }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [selected, setSelected] = useState<Record<string, AssetListItem>>({});
   const [renewOpen, setRenewOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   useEffect(() => setDraft(applied), [applied]);
   useEffect(() => {
@@ -121,6 +123,9 @@ function AssetListInner({ category }: { category: AssetCategory }) {
             엑셀 다운로드
           </button>
           <SuperAdminOnly>
+            <button className="ghost" onClick={() => setUploadOpen(true)}>
+              엑셀 업로드
+            </button>
             <button onClick={() => navigate(`${categoryPath(category)}/import`)}>구매에서 가져오기</button>
             <button className="primary" onClick={() => navigate(`${categoryPath(category)}/new`)}>
               + 직접 등록
@@ -333,6 +338,16 @@ function AssetListInner({ category }: { category: AssetCategory }) {
           </button>
         </div>
       </div>
+
+      {uploadOpen && (
+        <AssetUploadModal
+          onClose={() => setUploadOpen(false)}
+          onDone={() => {
+            setUploadOpen(false);
+            load();
+          }}
+        />
+      )}
 
       {renewOpen && (
         <RenewModal

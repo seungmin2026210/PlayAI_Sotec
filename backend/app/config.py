@@ -254,4 +254,5 @@ ASSET_NO_SEQ_MAX = 999        # 연·유형당 순번 3자리(D6)
 ASSET_EXPIRING_DAYS = 30      # "만료 임박" 배지 / 대시보드 D-30
 ASSET_RENEWAL_KPI_FAR_DAYS = 90
 ASSET_BULK_MAX = 100          # 수량 N 등록 상한 — 임시 결정 P8
+ASSET_UPLOAD_MAX_ROWS = 500   # 엑셀 일괄 업로드 파일당 행 수 상한 — 임시 결정 P10
 ASSET_TZ_OFFSET_HOURS = 9     # "오늘"·"올해" 기준 KST(D45). DST 없음 → 고정 오프셋

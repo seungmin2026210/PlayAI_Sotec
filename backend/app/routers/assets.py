@@ -1,13 +1,13 @@
 """자산관리 API — specs/ASSET-1/TECH.md "API 엔드포인트". HTTP·권한·직렬화만, 로직은 services.
 
-라우트 선언 순서: `/api/assets/` 아래 고정 경로(export.xlsx, importable, import, import/cancel, renew)를
+라우트 선언 순서: `/api/assets/` 아래 고정 경로(export.xlsx, importable, import, import/cancel, renew, upload…)를
 `/{asset_no}` 계열보다 **먼저** 둔다(QUOTE-1 export.xlsx 와 같은 이유).
 """
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, File, Query, Response, UploadFile
 from google.cloud import firestore
 
 from ..auth import CurrentUser
@@ -28,8 +28,8 @@ from ..deps import (
     require_super_admin,
     scope_group,
 )
-from ..errors import FORBIDDEN_ROLE, NOT_FOUND, AppError, validation
-from ..models import Asset
+from ..errors import ASSET_UPLOAD_INVALID, FORBIDDEN_ROLE, NOT_FOUND, AppError, validation
+from ..models import Asset, Member
 from ..presenter import to_asset_list_item, to_asset_read, to_asset_unit_read
 from ..schemas import (
     AssetCreate,
@@ -39,6 +39,8 @@ from ..schemas import (
     AssetListResponse,
     AssetRead,
     AssetUnitRead,
+    AssetUploadPreview,
+    AssetUploadResponse,
     AssetUpdate,
     AssignmentPatch,
     AssignRequest,
@@ -49,7 +51,8 @@ from ..schemas import (
     TransferRequest,
     UnitNoRequest,
 )
-from ..services import asset_assignment, asset_registration, asset_renewal, asset_secret
+from ..services import asset_assignment, asset_registration, asset_renewal, asset_secret, asset_upload
+from ..services.asset_dates import today_kst
 from ..services.asset_bulk import check_valid_range
 from ..services.asset_query import asset_history, importable_units, list_assets
 from ..services.asset_registration import has_history
@@ -201,6 +204,57 @@ def renew(
         unit_no=body.unit_no or None, user=user,
     )
     return AssetCreateResponse(asset_nos=sorted(set(body.asset_nos)))
+
+
+# --------------------------------------------------------------------------- 엑셀 일괄 업로드(D50)
+@router.get("/assets/upload/template.xlsx")
+def upload_template(_: CurrentUser = Depends(require_super_admin)) -> Response:
+    return Response(
+        content=asset_upload.build_template_xlsx(), media_type=_XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="{asset_upload.template_filename()}"'},
+    )
+
+
+def _upload_plan(client: firestore.Client, file: UploadFile) -> asset_upload.Plan:
+    parsed = asset_upload.parse_workbook(file.file.read())
+    members = [Member.from_doc(d.to_dict()) for d in client.collection("members").stream()]
+    existing = [
+        d.to_dict()
+        for d in client.collection("assets")
+        .select(["asset_no", "status", "serial_no", "license_key", "account_id"])
+        .stream()
+    ]
+    plan = asset_upload.build_plan(parsed, members, existing, today=today_kst())
+    if any(r.has_password for r in plan.preview.rows):
+        asset_secret.ensure_key()  # 키 없으면 비밀번호 든 업로드는 미리보기부터 501(D43)
+    return plan
+
+
+@router.post("/assets/upload/preview", response_model=AssetUploadPreview)
+def upload_preview(
+    file: UploadFile = File(...),
+    client: firestore.Client = Depends(get_db),
+    _: CurrentUser = Depends(require_super_admin),
+) -> AssetUploadPreview:
+    """검증만 — 아무것도 저장하지 않는다. 행 오류는 200 + errors, 파일 단위 문제는 400."""
+    return _upload_plan(client, file).preview
+
+
+@router.post("/assets/upload", response_model=AssetUploadResponse, status_code=201)
+def upload(
+    file: UploadFile = File(...),
+    client: firestore.Client = Depends(get_db),
+    user: CurrentUser = Depends(require_super_admin),
+) -> AssetUploadResponse:
+    """미리보기와 같은 파일을 다시 받아 처음부터 재검증 후 저장(서버는 상태를 들고 있지 않음)."""
+    plan = _upload_plan(client, file)
+    if not plan.ok:
+        raise AppError(
+            ASSET_UPLOAD_INVALID, 400,
+            f"오류 {len(plan.preview.errors)}건이 있어 등록하지 않았습니다. 미리보기에서 확인하세요.",
+        )
+    batch_id, nos = asset_registration.upload_assets(client, plan.items, user)
+    return AssetUploadResponse(batch_id=batch_id, asset_nos=nos, counts=plan.preview.counts)
 
 
 # --------------------------------------------------------------------------- 직접 등록

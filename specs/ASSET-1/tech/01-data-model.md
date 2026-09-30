@@ -52,6 +52,7 @@
   "quote_no": "26-A-003",            // quotes 문서 ID(= mgmt_no). null 허용
   "contract_no": "C-2026-11",        // 임시 자유입력(D11). 계약관리 생기면 참조로 교체
   "source_unit_no": "인텔리제이-001", // 가져오기로 만든 경우 asset_units 문서 ID(N건 모두 같은 값), 직접 등록은 null
+  "upload_batch_id": null,           // 엑셀 일괄 업로드(D50)로 만든 경우 그 업로드 ID(같은 파일 = 같은 값). 추적용, 일괄 취소 기능 없음
 
   // 유효기간
   "valid_from": "2026-01-10",

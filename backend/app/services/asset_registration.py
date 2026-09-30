@@ -1,10 +1,12 @@
-"""자산 등록(직접 · 구매에서 가져오기, 수량 N) · 가져오기 취소 · 구매 폐기 연쇄 — specs/ASSET-1 § 8-1, 8-2, 8-9, COORDINATION C4.
+"""자산 등록(직접 · 구매에서 가져오기, 수량 N · 엑셀 일괄 업로드) · 가져오기 취소 · 구매 폐기 연쇄 — specs/ASSET-1 § 8-1, 8-2, 8-9, D50, COORDINATION C4.
 
 입력 정리·금액 분할은 `asset_bulk`(순수 함수), 채번은 `asset_no`. 비밀번호 암호화는 트랜잭션
 **밖에서** 먼저 한다 — 키가 없으면(501) 아무것도 쓰기 전에 실패(D43).
 """
 from __future__ import annotations
 
+import uuid
+from collections import Counter
 from datetime import datetime, timezone
 
 from google.cloud import firestore
@@ -27,14 +29,16 @@ from ..errors import (
     ALREADY_RETIRED,
     ASSET_HAS_HISTORY,
     ASSET_IN_USE,
+    MEMBER_INACTIVE,
     NOT_FOUND,
     AppError,
     validation,
 )
 from ..models import Asset, AssetUnit
 from . import asset_secret
+from .asset_assignment import _current_fields, _new_assignment
 from .asset_bulk import check_quantity, check_valid_range, clean_fields, split_price
-from .asset_no import allocate_asset_nos_in
+from .asset_no import allocate_asset_nos_in, allocate_groups_in, asset_year
 
 
 def _now() -> datetime:
@@ -143,6 +147,40 @@ def import_assets(client, unit_no: str, data: dict, quantity: int, user: Current
         client, unit.asset_category, fields, quantity, split_price(total, quantity), user,
         unit_ref=unit_ref, unit_check=check_linkable,
     )
+
+
+# --------------------------------------------------------------------------- 엑셀 일괄 업로드(D50)
+def upload_assets(client, items: list, user: CurrentUser) -> tuple[str, list[str]]:
+    """검증을 통과한 `asset_upload.PlannedAsset` 목록을 **한 트랜잭션**으로 저장 — 전부 되거나 전부 안 됨.
+
+    채번(유형·연도 묶음별) + 자산 + (사용자가 있으면) 배정 이력. 자산마다 `upload_batch_id` 기록.
+    검증 후 트랜잭션 사이에 팀원이 퇴사 처리됐을 수 있어 배정 대상 팀원은 트랜잭션 안에서 다시 확인한다."""
+    batch_id = uuid.uuid4().hex[:12]
+    now = _now()
+    prepared = [(it, prepare_fields(it.category, it.fields)) for it in items]  # 암호화는 트랜잭션 밖(D43)
+    keys = [(it.category, asset_year(f.get("purchase_date"))) for it, f in prepared]
+    member_ids = sorted({it.target.member_id for it in items if it.target and it.target.member_id})
+
+    def _txn(txn):
+        for mid in member_ids:
+            snap = client.collection("members").document(mid).get(transaction=txn)
+            if not snap.exists or not snap.get("active"):
+                raise AppError(MEMBER_INACTIVE, 409, f"팀원({mid})이 명단에 없거나 퇴사 처리됐습니다. 다시 미리보기 하세요.")
+        allocated = {k: iter(v) for k, v in allocate_groups_in(txn, client, Counter(keys)).items()}
+        nos = []
+        for (it, fields), key in zip(prepared, keys):
+            no = next(allocated[key])
+            doc = _build(no, it.category, fields, fields.get("price"), user, now)
+            doc["upload_batch_id"] = batch_id
+            if it.target is not None:
+                a_ref = client.collection("asset_assignments").document()
+                txn.set(a_ref, _new_assignment(Asset.from_doc(doc), it.target, it.start_date, None, user, now))
+                doc.update(_current_fields(it.target, a_ref.id, it.start_date))
+            txn.set(client.collection("assets").document(no), doc)
+            nos.append(no)
+        return nos
+
+    return batch_id, run_transaction(client, _txn)
 
 
 # --------------------------------------------------------------------------- § 8-9 가져오기 취소(D35)

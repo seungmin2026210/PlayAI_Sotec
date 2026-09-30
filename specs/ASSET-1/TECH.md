@@ -20,6 +20,11 @@
 - 복호화 실패(키가 저장 당시와 다름)도 `501 SECRET_KEY_MISSING` 으로 응답(메시지로 구분).
 - `PATCH /api/asset-assignments/{id}`, 배정/회수/이관/취소는 갱신된 **자산 상세**를 반환(화면 즉시 갱신용).
 - 대시보드 "만료됨 N건" 클릭은 SW 탭 만료 필터로 이동(탭 전환 시 필터는 유지되지 않음).
+- 엑셀 일괄 업로드(D50~D52, 2026-09-30): 파싱·검증·템플릿은 `services/asset_upload.py`(DB 무관 순수), 저장은 `asset_registration.upload_assets`.
+  서버는 미리보기 결과를 들고 있지 않는다(서버리스) — `/upload` 가 같은 파일을 받아 처음부터 재검증. 행 오류는 미리보기에서 `200` + `errors`,
+  등록 시엔 `400 ASSET_UPLOAD_INVALID`. 저장은 **한 트랜잭션**: 배정 대상 팀원 재확인(read) → `asset_no.allocate_groups_in`(유형·연도 묶음 카운터를 전부 read 한 뒤 write)
+  → 자산 + 배정 이력 set. 500행 × (자산+이력) ≈ 1,000 쓰기 — Firestore 는 커밋당 쓰기 개수 제한이 없고 요청 10 MiB·270초 제한만 있어 한 트랜잭션으로 충분(에뮬레이터 500행 테스트).
+  배정 필드는 `asset_assignment._new_assignment`/`_current_fields` 재사용(직접 배정과 같은 문서 모양). 자산에 `upload_batch_id` 기록.
 
 ## 스택
 
@@ -35,13 +40,14 @@ QUOTE-1/PURCHASE-1과 동일(FastAPI + Firestore, React 18 + TS + Vite). 신규 
 | `schemas.py` | 입력/응답 스키마. **응답엔 `password_enc` 없음**, `has_password: bool`만. 입력의 `password`는 write-only — **없음/`null`/`""` = 변경 없음**(D42), 삭제는 별도 엔드포인트. 수정 스키마엔 `category` 필드 자체가 없음(D41). 등록 스키마 `quantity: int = 1`(1~`ASSET_BULK_MAX`). 배정/이관 입력은 `member_id`와 `shared_label` 중 정확히 하나 |
 | `errors.py` | `ALREADY_IMPORTED`, `ASSET_NOT_IDLE`, `ASSET_IN_USE`, `ASSET_NOT_IN_USE`, `ASSET_DISPOSED`, `ASSET_DELETED`, `ASSET_IMPORTED`, `ASSET_HAS_HISTORY`, `MEMBER_INACTIVE`, `SECRET_KEY_MISSING` 추가(기존 `SEQ_EXHAUSTED`·`ALREADY_RETIRED`·`VALIDATION_ERROR` 재사용) |
 | `deps.py` | `assert_can_view_asset(asset, user)` — `scope_group_code` 기준, 타 그룹 404. **`can_reveal_password(asset, user)` — 비밀번호 열람 판정 격리 지점(D16)**: 지금은 `role == SUPER_ADMIN`만 True. 팀원 로그인 도입 시 `asset.current_member_id == user.employee_no` 조건만 추가 |
-| `services/asset_no.py`(신규) | `allocate_asset_nos_in(txn, category, purchase_date, count)` — `asset_seq/{cat}-{YY}`에서 연속 N개 확보. 기존 `services/asset_numbering.py`는 구매 유닛 채번 전용이라 건드리지 않음 |
+| `services/asset_no.py`(신규) | `allocate_asset_nos_in(txn, category, purchase_date, count)` — `asset_seq/{cat}-{YY}`에서 연속 N개 확보. `allocate_groups_in(txn, {(cat, year): n})` — 여러 묶음을 한 트랜잭션에서(엑셀 업로드). 기존 `services/asset_numbering.py`는 구매 유닛 채번 전용이라 건드리지 않음 |
 | `services/asset_dates.py` | `today_kst()`(D45 — 날짜 기준 유일 계산처), 날짜 규칙 검사 순수 함수 `validate_period(...)`(D36) |
 | `services/asset_bulk.py` | 수량 N 등록 시 자산 dict N개 생성, 금액 분할(P9 — 나머지 첫 자산) — 순수 함수 |
 | `services/asset_secret.py` | `encrypt(plain)`/`decrypt(token)` — Fernet, 키는 `ASSET_SECRET_KEY` 환경변수. 키 없으면 `501 SECRET_KEY_MISSING` — 비밀번호가 포함된 요청은 **통째로 실패**(D43), 비밀번호 없는 요청은 키를 건드리지 않으므로 정상 |
 | `services/asset_assignment.py` | 배정/회수/이관/이력수정/배정 취소 트랜잭션(data-model §8-3~8-6, §8-8) |
 | `services/asset_registration.py` | 직접 등록(§8-2)·가져오기(§8-1)·가져오기 취소(§8-9), 구매 유닛 → 자산 매핑(C5) |
 | `services/asset_renewal.py` | 갱신 트랜잭션(§8-10) |
+| `services/asset_upload.py` | 엑셀 일괄 업로드(D50): 열 정의(템플릿·파싱 공용) `columns(category)`, `build_template_xlsx`, `parse_workbook`(파일 단위 오류는 400), `build_plan`(행 검증 → 저장할 항목 + 미리보기). 순수 함수 — 팀원·기존 자산은 호출자가 넘김 |
 | `services/asset_status.py` | 상태 가드: 폐기 자산 수정 불가, 사용 중 폐기 불가(P1) — `services/status.py` 스타일 순수 함수 |
 | `services/asset_query.py`(확장) | `list_assets`, `renewals(from, to)` 묶음 집계 + KPI(`expired`/`d30`/`d90`), 사용자별 집계, 팀원 상세 `linkable` 판정(D37) |
 | `services/members.py` | 팀원 수정 시 그룹·이름 전파(§8-7) |
@@ -63,6 +69,9 @@ QUOTE-1/PURCHASE-1과 동일(FastAPI + Firestore, React 18 + TS + Vite). 신규 
 | POST | `/api/assets/import` | 전체관리자 | `{unit_no, quantity, ...폼값}` → 자산 N건(§8-1). 응답: 생성된 자산 목록 |
 | POST | `/api/assets/import/cancel` | 전체관리자 | `{unit_no}` → 가져오기 취소(§8-9) |
 | POST | `/api/assets/renew` | 전체관리자 | `{asset_nos, new_valid_to, new_valid_from?, unit_no?}` → 갱신(§8-10) |
+| GET | `/api/assets/upload/template.xlsx` | 전체관리자 | 업로드 템플릿(D50) |
+| POST | `/api/assets/upload/preview` | 전체관리자 | multipart `file` → 검증만(`{total, counts, rows, errors, warnings}`), 저장 안 함 |
+| POST | `/api/assets/upload` | 전체관리자 | multipart `file` → 재검증 후 한 트랜잭션 저장 `{batch_id, asset_nos, counts}`. 행 오류 있으면 `400 ASSET_UPLOAD_INVALID` |
 | POST | `/api/assets` | 전체관리자 | 직접 등록 `{quantity, ...폼값}`(§8-2) |
 | GET | `/api/assets/{asset_no}` | 로그인(스코프) | 상세 + 사용 이력 + 갱신 기록 |
 | PATCH | `/api/assets/{asset_no}` | 전체관리자 | 수정(번호·유형·상태·현재사용자 제외). `password`에 값이 있을 때만 재암호화(D42) |
@@ -82,7 +91,7 @@ QUOTE-1/PURCHASE-1과 동일(FastAPI + Firestore, React 18 + TS + Vite). 신규 
 | GET | `/api/dashboard/renewals` | 로그인(스코프) | `from`,`to` → `[{date, name, category, count, asset_nos}]` + `kpi{expired, d30, d90}` |
 | GET | `/api/meta` | 로그인 | 기존 응답에 `asset_subcategories`, `asset_statuses` 추가 |
 
-**라우트 선언 순서**: `/api/assets/` 아래 고정 경로(`export.xlsx`, `importable`, `import`, `import/cancel`, `renew`)를 전부
+**라우트 선언 순서**: `/api/assets/` 아래 고정 경로(`export.xlsx`, `importable`, `import`, `import/cancel`, `renew`, `upload/*`)를 전부
 `/{asset_no}` 계열보다 **먼저** 선언한다(QUOTE-1 `export.xlsx`와 같은 이유).
 
 응답 에러 형식은 기존과 동일 `{"detail":{"code","message"}}`. 새 코드는 구현 시 `specs/QUOTE-1/tech/04-api-endpoints.md` 표에도 추가.
@@ -93,7 +102,8 @@ QUOTE-1/PURCHASE-1과 동일(FastAPI + Firestore, React 18 + TS + Vite). 신규 
 |---|---|
 | `design/Sidebar.tsx` | `CONTRACT_CHILDREN`에 자산관리 추가(C7) |
 | `App.tsx` | `/assets`(→`/assets/sw` 리다이렉트), `/assets/:category`, `/assets/:category/new`, `/assets/:category/import`, `/assets/item/:assetNo`, `/assets/members`, `/assets/members/:employeeNo` |
-| `pages/AssetList.tsx` | SW/HW/교육 탭 공용 목록(유형별 컬럼만 다름) + 필터 바 + 엑셀 + 같은 품명·종료일 선택 시 [갱신] 모달 |
+| `pages/AssetList.tsx` | SW/HW/교육 탭 공용 목록(유형별 컬럼만 다름) + 필터 바 + 엑셀 + 같은 품명·종료일 선택 시 [갱신] 모달 + [엑셀 업로드] 버튼 |
+| `components/AssetUploadModal.tsx` | 엑셀 일괄 업로드 모달(D50): 템플릿 내려받기 → 파일 선택 → 미리보기(건수·오류·경고·행 목록) → 등록 |
 | `pages/AssetForm.tsx` | 등록/수정 공용. 유형별 필드 섹션. 등록 모드엔 수량 칸, 수정 모드엔 유형 고정·비밀번호 빈 칸 = 유지 + [비밀번호 삭제]. 가져오기 모드는 구매 값 프리필 |
 | `pages/AssetImport.tsx` | 가져올 구매 유닛 선택 |
 | `pages/AssetDetail.tsx` | 상세 + 사용 이력 + 갱신 기록 + 배정(팀원/공용)/회수/이관/배정 취소 모달 + 가져오기 취소 + 비밀번호 보기/복사(`SuperAdminOnly`). 날짜 입력은 오늘(KST) 이후 선택 불가 |
@@ -128,6 +138,8 @@ QUOTE-1/PURCHASE-1과 동일(FastAPI + Firestore, React 18 + TS + Vite). 신규 
 - 권한: 그룹관리자 쓰기 403, 타 그룹 상세 404, 스코프가 현재 사용자 그룹을 따라감, 팀원 그룹 변경 시 스코프 갱신, 명단은 본인 그룹만, 타 그룹 스코프 과거 이력 `linkable: false`, 라이선스키 마스킹(상세·목록·엑셀)·키 검색 무효
 - 비밀번호: 목록/상세/엑셀 응답에 평문·암호문 부재, 전체관리자 reveal 성공 + 열람 기록 생성, 그룹관리자 403, 키 없음 501(비밀번호 포함 등록·수정은 전체 실패, 미포함은 성공)
 - 대시보드: 같은 날·같은 품명 묶음, 폐기 제외, 스코프, `expired` 건수
+- 엑셀 업로드(`tests/test_asset_upload.py`): 템플릿·업로드 전체관리자 전용, 미리보기는 저장 안 함, 등록 시 자산+배정 이력+`upload_batch_id`·비밀번호 암호문, 행 오류 있으면 400·0건(카운터도 안 바뀜), 파일 단위 400, 키 없음 501(미리보기부터), 기존 번호 뒤에 이어 채번 + 중복 경고, 미리보기 후 퇴사 처리 시 거부, 500행 전부 배정 포함 한 트랜잭션
+- `tests/unit/test_asset_upload.py`: 템플릿 시트·드롭다운, 값 변환(날짜 여러 형식·엑셀 일련번호·금액 "1,200,000원"·숫자 셀 → 텍스트), 필수·길이·유효기간·그룹/소분류 오류, 사번/이름/공용 배정·동명이인·퇴사자·미래/구매일 이전 시작일, 시작일 자동 채움, 중복 경고(삭제된 자산 제외)
 - `tests/unit/`: 만료 배지 계산(KST), 소분류 검증, 번호 포맷, 금액 분할, 날짜 규칙 `validate_period`, 라이선스키 마스킹
 
 ## 구현 순서(제안)

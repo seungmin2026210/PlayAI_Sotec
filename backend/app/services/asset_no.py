@@ -31,14 +31,34 @@ def allocate_asset_nos_in(
     count: int,
 ) -> list[str]:
     """열린 트랜잭션 안에서 N개 확보. 999 를 넘으면 하나도 만들지 않고 409."""
-    year = asset_year(purchase_date)
-    ref = client.collection("asset_seq").document(f"{category}-{year % 100:02d}")
-    snap = ref.get(transaction=transaction)
-    last = snap.get("last_seq") if snap.exists else 0
-    if last + count > ASSET_NO_SEQ_MAX:
-        raise AppError(
-            SEQ_EXHAUSTED, 409,
-            f"{category}-{year % 100:02d} 번호가 부족합니다(남은 번호 {ASSET_NO_SEQ_MAX - last}개).",
-        )
-    transaction.set(ref, {"last_seq": last + count})
-    return [format_asset_no(category, year, s) for s in range(last + 1, last + count + 1)]
+    key = (category, asset_year(purchase_date))
+    return allocate_groups_in(transaction, client, {key: count})[key]
+
+
+def allocate_groups_in(
+    transaction: firestore.Transaction,
+    client: firestore.Client,
+    counts: dict[tuple[str, int], int],
+) -> dict[tuple[str, int], list[str]]:
+    """여러 (유형, 연도) 묶음을 한 트랜잭션에서 확보(엑셀 업로드 — D50).
+
+    Firestore 트랜잭션은 read 를 전부 끝낸 뒤 write 해야 하므로 카운터를 모두 읽고 검사한 다음 쓴다.
+    하나라도 999 를 넘으면 아무것도 쓰지 않고 409."""
+    refs = {key: client.collection("asset_seq").document(f"{key[0]}-{key[1] % 100:02d}") for key in counts}
+    lasts = {}
+    for key, ref in refs.items():
+        snap = ref.get(transaction=transaction)
+        lasts[key] = snap.get("last_seq") if snap.exists else 0
+    for (category, year), n in counts.items():
+        last = lasts[(category, year)]
+        if last + n > ASSET_NO_SEQ_MAX:
+            raise AppError(
+                SEQ_EXHAUSTED, 409,
+                f"{category}-{year % 100:02d} 번호가 부족합니다(남은 번호 {ASSET_NO_SEQ_MAX - last}개).",
+            )
+    out = {}
+    for (category, year), n in counts.items():
+        last = lasts[(category, year)]
+        transaction.set(refs[(category, year)], {"last_seq": last + n})
+        out[(category, year)] = [format_asset_no(category, year, s) for s in range(last + 1, last + n + 1)]
+    return out

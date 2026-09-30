@@ -1,4 +1,4 @@
-import { apiDownload, apiGet, apiSend, buildQuery } from "./client";
+import { apiDownload, apiGet, apiSend, apiUpload, buildQuery } from "./client";
 import type {
   Asset,
   AssetCategory,
@@ -6,6 +6,8 @@ import type {
   AssetListFilters,
   AssetListResponse,
   AssetUnit,
+  AssetUploadPreview,
+  AssetUploadResult,
   AssignTarget,
 } from "../types";
 
@@ -98,4 +100,17 @@ export function renewAssets(body: {
   unit_no: string | null;
 }): Promise<{ asset_nos: string[] }> {
   return apiSend("POST", "/api/assets/renew", body);
+}
+
+// 엑셀 일괄 업로드(D50) — 미리보기는 검증만, 등록은 같은 파일을 서버가 다시 검증한 뒤 저장
+export function downloadUploadTemplate(): Promise<void> {
+  return apiDownload("/api/assets/upload/template.xlsx");
+}
+
+export function previewAssetUpload(file: File): Promise<AssetUploadPreview> {
+  return apiUpload("/api/assets/upload/preview", file);
+}
+
+export function uploadAssets(file: File): Promise<AssetUploadResult> {
+  return apiUpload("/api/assets/upload", file);
 }

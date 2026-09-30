@@ -42,10 +42,10 @@ vercel.json, backend/api/index.py   Vercel 배포 진입점(프론트 정적 빌
 | `services/export_excel.py` | openpyxl: 개별 견적서(실제 견적서.jpg 양식) / 목록. APPROVED 는 대표자명 옆 직인 합성 |
 | `services/export_pdf.py` | reportlab(순수 파이썬), 엑셀과 동일 양식. 한글 폰트는 `app/assets/fonts/`에 임베드해 시스템 의존성 없음(Vercel Serverless 등에서도 동작). import/렌더 실패 시 `501 PDF_UNAVAILABLE`, 서버는 계속 동작 |
 | `services/asset_numbering.py` | 구매관리(PURCHASE-1) 유닛 채번 `{상품명}-{순번}`. 상품별 독립 시퀀스(`asset_product_seq/{product_id}`), 연도 개념 없음. `routers/asset_units.py: create_asset_unit`가 채번+유닛 생성을 트랜잭션으로 묶음 |
-| `services/asset_*.py`(numbering 제외), `services/members.py` | 자산관리(ASSET-1): `asset_dates`(**KST `today_kst()` 유일 계산처**, 날짜 규칙 `validate_period`), `asset_no`(`SW-26-001` 채번, 수량 N), `asset_bulk`(입력 정리·금액 분할, 순수), `asset_registration`(등록·가져오기·가져오기 취소), `asset_assignment`(배정·회수·이관·이력수정·배정 취소), `asset_renewal`, `asset_status`, `asset_secret`(Fernet, 키 `ASSET_SECRET_KEY`), `asset_query`(목록·사용자별·대시보드 갱신 집계) |
+| `services/asset_*.py`(numbering 제외), `services/members.py` | 자산관리(ASSET-1): `asset_dates`(**KST `today_kst()` 유일 계산처**, 날짜 규칙 `validate_period`), `asset_no`(`SW-26-001` 채번, 수량 N), `asset_bulk`(입력 정리·금액 분할, 순수), `asset_registration`(등록·가져오기·가져오기 취소), `asset_assignment`(배정·회수·이관·이력수정·배정 취소), `asset_renewal`, `asset_status`, `asset_secret`(Fernet, 키 `ASSET_SECRET_KEY`), `asset_query`(목록·사용자별·대시보드 갱신 집계), `asset_upload`(엑셀 일괄 업로드 템플릿·파싱·검증, 순수 — 저장은 `asset_registration.upload_assets`) |
 | `routers/` | `auth.py`, `meta.py`, `quotes.py`, `asset_products.py`/`asset_units.py`(구매관리), `assets.py`/`members.py`/`dashboard.py`(자산관리) — HTTP·권한·직렬화만, 로직은 services. 비밀번호 열람 판정 `deps.can_reveal_password`, 라이선스키 마스킹 `presenter.mask_license_key` 가 격리 지점 |
 
-라우트 등록 순서 주의: `GET /api/quotes/export.xlsx` 는 `GET /api/quotes/{quote_id}` **보다 먼저** 선언해야 한다. `/api/assets/` 아래 고정 경로(`export.xlsx`, `importable`, `import`, `import/cancel`, `renew`)도 `/{asset_no}` 보다 먼저.
+라우트 등록 순서 주의: `GET /api/quotes/export.xlsx` 는 `GET /api/quotes/{quote_id}` **보다 먼저** 선언해야 한다. `/api/assets/` 아래 고정 경로(`export.xlsx`, `importable`, `import`, `import/cancel`, `renew`, `upload/*`)도 `/{asset_no}` 보다 먼저.
 
 ### frontend/src
 
@@ -63,7 +63,7 @@ vercel.json, backend/api/index.py   Vercel 배포 진입점(프론트 정적 빌
 | `pages/{Login,QuoteList,QuoteDetail,QuoteForm}.tsx` | |
 | `pages/Dashboard.tsx` | 로그인 후 첫 화면(`/dashboard`). 갱신 임박(D-30, 만료됨) KPI·갱신 캘린더·다가오는 갱신 일정은 `/api/dashboard/renewals` 실데이터(ASSET-1), 나머지 통계·예산·자산 현황은 **목업("예시" 표시)** |
 | `pages/Purchase*.tsx` | 구매관리(`/purchase`) |
-| `pages/Asset*.tsx`, `pages/Member*.tsx` | 자산관리(`/assets/{sw,hw,edu}`, `/assets/item/:assetNo`, `/assets/members`). 공용 컴포넌트 `components/{AssetTabs,AssetBadges,TargetPicker,Modal}.tsx`, KST 날짜 `lib/date.ts` |
+| `pages/Asset*.tsx`, `pages/Member*.tsx` | 자산관리(`/assets/{sw,hw,edu}`, `/assets/item/:assetNo`, `/assets/members`). 공용 컴포넌트 `components/{AssetTabs,AssetBadges,TargetPicker,Modal,AssetUploadModal}.tsx`, KST 날짜 `lib/date.ts` |
 | `pages/Placeholder.tsx` | 아직 백엔드가 없는 화면용 "준비 중" 화면 |
 
 사이드바 메뉴 구조(계약관리 그룹 하위 견적관리/구매관리/자산관리)와 라우팅은 `design/Sidebar.tsx` 에서 관리 — 새 메뉴 추가 시 `CONTRACT_CHILDREN` 과 `App.tsx` 라우트를 함께 수정한다.

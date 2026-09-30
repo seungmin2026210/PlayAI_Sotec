@@ -556,6 +556,42 @@ class AssetCreateResponse(BaseModel):
     asset_nos: list[str]
 
 
+class AssetUploadIssue(BaseModel):
+    """엑셀 업로드 검증 결과 1건 — row/column 이 None 이면 시트(또는 파일) 단위."""
+
+    sheet: str
+    row: int | None = None
+    column: str | None = None
+    message: str
+
+
+class AssetUploadRow(BaseModel):
+    sheet: str
+    row: int
+    category: str
+    name: str | None
+    group_name: str | None
+    subcategory_label: str | None
+    user_label: str | None  # 팀원 이름(사번) / "공용 · 장소" / None(미사용)
+    start_date: str | None
+    start_auto: bool  # 사용 시작일을 구매일·오늘로 자동 채움
+    has_password: bool
+
+
+class AssetUploadPreview(BaseModel):
+    total: int
+    counts: dict[str, int]  # 유형별 건수
+    rows: list[AssetUploadRow]
+    errors: list[AssetUploadIssue]
+    warnings: list[AssetUploadIssue]
+
+
+class AssetUploadResponse(BaseModel):
+    batch_id: str
+    asset_nos: list[str]
+    counts: dict[str, int]
+
+
 # --------------------------------------------------------------------------- ASSET-1: 팀원
 class MemberCreate(BaseModel):
     employee_no: str = Field(min_length=1, max_length=20)

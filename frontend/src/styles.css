@@ -173,6 +173,13 @@ label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--
   display: flex; align-items: center; justify-content: center; padding: 16px;
 }
 .modal { width: 100%; max-width: 520px; max-height: calc(100vh - 32px); overflow: auto; }
+.modal.modal-wide { max-width: 960px; }
+/* 엑셀 일괄 업로드 모달(ASSET-1 D50) */
+.upload-scroll { max-height: 320px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
+.upload-issues { padding: 10px 12px; border-radius: 6px; font-size: 14px; max-height: 200px; overflow: auto; }
+.upload-issues ul { margin: 6px 0 0; padding-left: 18px; }
+.upload-issues-error { background: #fee2e2; color: #b91c1c; }
+.upload-issues-warn { background: #fef3c7; color: #92400e; }
 .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .modal-head h2 { margin: 0; }
 

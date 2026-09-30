@@ -62,6 +62,7 @@ Base: `/api`. 인증: `Authorization: Bearer <token>` (로그인 제외).
 | `MEMBER_INACTIVE` | 409 | (ASSET-1) 퇴사자에게 배정·이관 |
 | `MEMBER_EXISTS` | 409 | (ASSET-1) 이미 등록된 사번으로 팀원 등록 |
 | `SECRET_KEY_MISSING` | 501 | (ASSET-1) `ASSET_SECRET_KEY` 없음/형식 오류/저장 당시 키와 다름 — 비밀번호 포함 요청만 |
+| `ASSET_UPLOAD_INVALID` | 400 | (ASSET-1) 엑셀 일괄 업로드 [등록] 시 행 오류가 남아 있음 — 한 건도 저장 안 함(D50) |
 
 자산관리(ASSET-1) 엔드포인트 목록은 `specs/ASSET-1/TECH.md` "API 엔드포인트".
 

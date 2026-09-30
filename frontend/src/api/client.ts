@@ -72,6 +72,16 @@ export async function apiSend<T>(
   return res.json() as Promise<T>;
 }
 
+/** 파일 업로드(multipart). Content-Type 은 브라우저가 boundary 와 함께 채운다. */
+export async function apiUpload<T>(path: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append("file", file);
+  const { "Content-Type": _json, ...h } = headers();
+  const res = await fetch(path, { method: "POST", headers: h, body: form });
+  if (!res.ok) await raise(res);
+  return res.json() as Promise<T>;
+}
+
 /** 파일 다운로드 (엑셀/PDF). 서버가 에러를 주면 ApiError 로 변환. */
 export async function apiDownload(path: string): Promise<void> {
   const res = await fetch(path, { headers: headers() });

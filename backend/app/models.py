@@ -322,6 +322,7 @@ class Asset:
     quote_no: str | None = None
     contract_no: str | None = None
     source_unit_no: str | None = None
+    upload_batch_id: str | None = None  # 엑셀 일괄 업로드로 만든 경우 그 업로드 ID(D50). 추적용
 
     valid_from: str | None = None
     valid_to: str | None = None

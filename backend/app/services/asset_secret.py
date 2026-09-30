@@ -36,3 +36,8 @@ def decrypt(token: str) -> str:
         raise AppError(
             SECRET_KEY_MISSING, 501, "암호화 키가 저장 당시와 달라 비밀번호를 복호화할 수 없습니다."
         )
+
+
+def ensure_key() -> None:
+    """키가 없으면 501 — 비밀번호가 든 업로드를 미리보기 단계에서 먼저 막는다(D43)."""
+    _fernet()

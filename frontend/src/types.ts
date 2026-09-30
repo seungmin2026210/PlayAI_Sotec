@@ -331,6 +331,41 @@ export interface AssetListResponse {
   items: AssetListItem[];
 }
 
+// 엑셀 일괄 업로드(ASSET-1 D50)
+export interface AssetUploadIssue {
+  sheet: string;
+  row: number | null;
+  column: string | null;
+  message: string;
+}
+
+export interface AssetUploadRow {
+  sheet: string;
+  row: number;
+  category: AssetCategory;
+  name: string | null;
+  group_name: string | null;
+  subcategory_label: string | null;
+  user_label: string | null;
+  start_date: string | null;
+  start_auto: boolean;
+  has_password: boolean;
+}
+
+export interface AssetUploadPreview {
+  total: number;
+  counts: Record<AssetCategory, number>;
+  rows: AssetUploadRow[];
+  errors: AssetUploadIssue[];
+  warnings: AssetUploadIssue[];
+}
+
+export interface AssetUploadResult {
+  batch_id: string;
+  asset_nos: string[];
+  counts: Record<AssetCategory, number>;
+}
+
 export interface AssetListFilters {
   category: AssetCategory;
   subcategory?: string;
